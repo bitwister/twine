@@ -8,8 +8,8 @@ Spend less time configuring vpn containers, and focus on architecture for your n
 
 Twine provides many essential features for rapid development: 
 - Easily configureable automatic port forwarding 
-- Standartized multi-protocol interface (Twine only downloads the protocol you use, saving space)
-- Rapid deployment with automatic usecase-based templates for server configuration  
+- Support for multiple protocols with universal configuration interface (TODO) 
+- Config auto generation based on usecase templates (TODO) 
 - Simple CLI/API interface for management and config creation
 
 **Supported protocols**
@@ -39,7 +39,6 @@ services:
       # This will automatically create/update route to the twine_edge gateway 
       #  based on latest Docker DNS updates
   
-  # docker-compose exec twine_edge netpipe.py openvpn adduser <username>
   twine_edge:
     image: ghcr.io/bitwister/twine:latest
     restart: unless-stopped
@@ -49,9 +48,10 @@ services:
     volumes:
       #  Docker access required for managing packet forwarding
       -  /var/run/docker.sock:/var/run/docker.sock
-      - ./config/netpipe_edge/:/config
-      - ./data/netpipe_edge/:/data
+      - ./config/twine_edge/client.ovpn:/config/openvpn/client.ovpn
     environment:
+      MODE: client
+      PROTOCOL: openvpn
       PORTS: >
         80,8080-8090>nginx:80
         25565:192.168.1.14:25565
@@ -101,14 +101,13 @@ You can call CLI interface with:
 
 ```
 Usage:
-	twine start [options]
+	twine start 
 	twine cleanup
-	twine openvpn create <username>
-	twine openvpn revoke <username>
+	twine openvpn-add <username>
+	twine openvpn-revoke <username>
 
 Options:
-  cleanup   Removes automatically created routes (called before container stops)
-
+	-h, --help 
 ```
 
 ## Contribute
@@ -116,8 +115,8 @@ Options:
 ### Develop
 - Start the development environment
 ```
-git clone 
-cd
+git clone https://github.com/bitwister/twine.git
+cd twine
 docker-compose up --build
 ```
 - Open docker container via (Remote Development Extension)[https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack] 
