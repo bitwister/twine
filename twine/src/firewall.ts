@@ -17,6 +17,7 @@ iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 iptables -A INPUT -i lo -j ACCEPT
+iptables -A INPUT -i tun+ -j ACCEPT
 iptables -A FORWARD -i lo -j ACCEPT
 iptables -A OUTPUT -o lo -j ACCEPT
 iptables -A OUTPUT -o tun+ -j ACCEPT
@@ -24,18 +25,7 @@ iptables -A OUTPUT -d 1.1.1.1 -j ACCEPT
 iptables -t nat -A POSTROUTING -o tun+ -j MASQUERADE
 	`, {log: false})
 
-	for(let _interface of await networking.interfaces()){
-		if(_interface.name.startsWith("eth")){
-			await utils.exec(`
-iptables -A INPUT -i ${_interface.name} -j ACCEPT
-iptables -A INPUT -s ${_interface.network} -j ACCEPT
-iptables -A FORWARD -d ${_interface.network} -j ACCEPT
-iptables -A FORWARD -s ${_interface.network} -j ACCEPT
-iptables -A OUTPUT -d ${_interface.network} -j ACCEPT
-iptables -t nat -A POSTROUTING -o ${_interface.name} -j MASQUERADE 
-			`, {log: false})
-		}
-	}
+	await iptables.updateInterfaces()
 }
 
 export class IPTables {
@@ -54,6 +44,20 @@ export class IPTables {
 			"-P FORWARD ACCEPT",
 			"-P OUTPUT ACCEPT",
 		])
+	}
+	async updateInterfaces(){
+		for(let _interface of await networking.interfaces()){
+			if(_interface.name.startsWith("eth")){
+				await this.insert([
+					`-A INPUT -i ${_interface.name} -j ACCEPT`,
+					`-A INPUT -s ${_interface.network} -j ACCEPT`,
+					`-A FORWARD -d ${_interface.network} -j ACCEPT`,
+					`-A FORWARD -s ${_interface.network} -j ACCEPT`,
+					`-A OUTPUT -d ${_interface.network} -j ACCEPT`,
+					`-t nat -A POSTROUTING -o ${_interface.name} -j MASQUERADE`,
+				])
+			}
+		}
 	}
 	async check(rule){
 		try{
@@ -77,6 +81,7 @@ export class IPTables {
 	}
 	async forward({protocol="tcp", sourcePorts, destination, destinationPort}){
 		await this.insert([`-t nat -A PREROUTING -i tun0 -p ${protocol} -m multiport --dports ${sourcePorts.join(",")} -j DNAT --to ${await utils.resolveIp(destination)}:${destinationPort}`])
+		log.info(`Forwarded ${sourcePorts}>${destination}:${destinationPort}/${protocol}`)
 	}
 }
 

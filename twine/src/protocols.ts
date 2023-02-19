@@ -2,6 +2,7 @@ import fs from "fs"
 
 import * as log from "@/log"
 import * as types from "@/types"
+import * as firewall from "@/firewall"
 import * as utils from "@/utils"
 import config from "@/config"
 
@@ -61,7 +62,8 @@ chmod +x /usr/bin/easyrsa
 
 	async startServer(){
 		log.info(`OpenVPN: Starting server`)
-		await utils.exec(`killall openvpn`, {log: false})
+		try{await utils.exec(`killall openvpn`, {log: false})}catch(error){}
+		setTimeout(firewall.iptables.updateInterfaces, 3000) // TODO: Better solution
 		this.process = await utils.exec(`/usr/sbin/openvpn --config /config/openvpn/server.ovpn `, {
 			// signal: this.abortController,
 			// wait: false
@@ -70,7 +72,8 @@ chmod +x /usr/bin/easyrsa
 
 	async startClient(){
 		log.info(`OpenVPN: Starting client`)
-		await utils.exec(`killall openvpn`, {log: false})
+		try{await utils.exec(`killall openvpn`, {log: false})}catch(error){}
+		setTimeout(firewall.iptables.updateInterfaces, 3000) // TODO: Better solution
 		this.process = await utils.exec(`/usr/sbin/openvpn --config /config/openvpn/client.ovpn`, {
 			// signal: this.abortController,
 			// wait: false

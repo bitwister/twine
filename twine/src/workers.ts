@@ -73,14 +73,15 @@ export class NetworkWorker {
 					ttl: 1000 * 60 * 10
 				}),
 			})
+			if(!(await docker.exec(container.id, `stat /busybox`)).match(/Access\:/)){
+				await docker.upload(container.id, {
+					"/busybox": fs.readFileSync("/busybox")
+				})
+				await docker.exec(container.id, `chmod +x /busybox`)
+			}
 			if(routesChanged){
 				let commands = []
-				if(!await docker.exec(container.id, `ls /busybox`)){
-					commands.push("chmod +x /busybox")
-					await docker.upload(container.id, {
-						"/busybox": fs.readFileSync("/busybox")
-					})
-				}
+				
 
 				let commandsDelete = []
 				for(let route of routesOld){
@@ -92,12 +93,13 @@ export class NetworkWorker {
 				}
 
 				for(let route of container.routes){
-					route.destinationIp = await docker.exec(container.id, `getent hosts ${route.destination} | awk '{ print $1 }'`) || route.destinationIp
+					route.destinationIp = (await docker.exec(container.id, `getent hosts ${route.destination} | awk '{ print $1 }'`)).match(/(\d+\.\d+\.\d+\.\d+)/)[1]
 					if(!route.destinationIp){
 						log.error(`Failed resolving route destination "${route.destination}" on container.id:${container.id}`)
 						continue
 					}
-					commands.push(`/busybox route add ${route.network} gw ${route.destinationIp}`)
+					log.info(`Worker: Created route ${route.network}>${route.destinationIp} for ${container.id}`)
+					commands.push(`/busybox route add ${route.network} gw ${route.destinationIp} metric 1`)
 				}
 
 				if(commandsDelete.length){
