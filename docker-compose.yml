@@ -1,0 +1,57 @@
+# This docker-compose file is used for local development
+version: "3.7"
+services:
+
+  nginx:
+    image: nginx:latest
+    networks:
+      - main
+    volumes: 
+      - ./config/nginx/static:/usr/share/nginx/html
+    ports:
+      - 80:80
+    cap_add:
+      - NET_ADMIN
+    labels:
+      - twine.route=0.0.0.0/0>twine_client
+
+  twine_server:
+    build: ./twine
+    restart: unless-stopped
+    networks:
+      - main
+    volumes:
+      - ./twine/src/:/app/src/
+      -  /var/run/docker.sock:/var/run/docker.sock
+      - ./config/twine_server/:/config
+      - ./data/twine_server/:/data
+    environment:
+      MODE: server
+      SERVER: openvpn
+    ports:
+      - 0.0.0.0:1193:1194/tcp
+    cap_add:
+      - NET_ADMIN
+    command: npm run develop
+  
+  twine_client:
+    build: ./twine
+    restart: unless-stopped
+    networks:
+      - main
+    volumes:
+      - ./twine/src/:/app/src/
+      -  /var/run/docker.sock:/var/run/docker.sock
+      - ./config/twine_client/:/config
+      - ./data/twine_client/:/data
+    environment:
+      MODE: client
+      CLIENT: openvpn
+      PORTS: >
+        80,8080>nginx:80/tcp
+    cap_add:
+      - NET_ADMIN
+    command: npm run develop
+
+networks:
+  main:
