@@ -23,7 +23,7 @@ export let init = async()=>{
 						id:	event.Actor.ID,
 						routes: utils.parseDockerTwineLabels(event.Actor.Attributes).routes
 					}
-					events.emmit("containerUpdate", container)
+					events.emit("containerUpdate", container)
 				}
 			})
 		})

@@ -71,17 +71,6 @@ chmod +x /usr/bin/easyrsa
 		})
 	}
 
-	// async readConfig(){
-	// 	let configFile = fs.promises.readFile(`/config/server.ovpn`)
-	// 	let config = {
-	// 		caPath: (configFile.match(/^\s*ca\s+(.*?)$/m)||[null, null])[1],
-	// 		caInline: (configFile.match(/^\s*\<ca\>(.*?)^\s*\<\/ca\>/ms)||[null, null])[1],
-	// 	}
-	// 	if((!config.caPath || !fs.existsSync(config.caPath)) && !config.caInline){
-	// 		await this.initPKI()
-	// 	}
-	// }
-
 	async initPKI(){
 		log.info(`OpenVPN: Initializing EasyRSA PKI`)
 		await utils.exec(`
