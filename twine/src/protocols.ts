@@ -55,8 +55,13 @@ chmod +x /usr/bin/easyrsa
 		}
 	}
 
+	async stop(){
+		await utils.exec("killall openvpn")
+	}
+
 	async startServer(){
 		log.info(`OpenVPN: Starting server`)
+		await utils.exec(`killall openvpn`, {log: false})
 		this.process = await utils.exec(`/usr/sbin/openvpn --config /config/openvpn/server.ovpn `, {
 			// signal: this.abortController,
 			// wait: false
@@ -65,6 +70,7 @@ chmod +x /usr/bin/easyrsa
 
 	async startClient(){
 		log.info(`OpenVPN: Starting client`)
+		await utils.exec(`killall openvpn`, {log: false})
 		this.process = await utils.exec(`/usr/sbin/openvpn --config /config/openvpn/client.ovpn`, {
 			// signal: this.abortController,
 			// wait: false

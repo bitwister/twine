@@ -31,8 +31,10 @@ Options:
 `.replace(/\t/g, " ".repeat(4))
 
 process.on("unhandledRejection", (reason, promise) => {
-	console.error(reason)
-	log.error("UnhandledRejection:", reason)
+	if(config.LOG_LEVEL == "debug"){
+		console.error(reason)
+	}
+	log.debug("UnhandledRejection:", reason)
 })
 
 export let cleanup = async()=>{
@@ -42,8 +44,6 @@ export let cleanup = async()=>{
 async function init(){
 
 	let options = neodoc.run(doc)
-
-	console.log(options)
 
 	let Protocol = protocols.protocols[config.PROTOCOL]
 	if(!Protocol){

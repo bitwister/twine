@@ -27,6 +27,7 @@ iptables -t nat -A POSTROUTING -o tun+ -j MASQUERADE
 	for(let _interface of await networking.interfaces()){
 		if(_interface.name.startsWith("eth")){
 			await utils.exec(`
+iptables -A INPUT -i ${_interface.name} -j ACCEPT
 iptables -A INPUT -s ${_interface.network} -j ACCEPT
 iptables -A FORWARD -d ${_interface.network} -j ACCEPT
 iptables -A FORWARD -s ${_interface.network} -j ACCEPT
