@@ -110,7 +110,7 @@ export let parseDockerTwineLabels = (labels)=>{
 	}
 	for(let [key, value] of Object.entries(labels) as Array<[string, string]>){
 		if(key == "twine.route"){
-			let [network, destination] = value.split(">", 2)
+			let [network, destination] = value.trim().split(">", 2)
 			output.routes.push({
 				network,
 				destination,

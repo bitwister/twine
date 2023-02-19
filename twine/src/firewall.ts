@@ -8,8 +8,8 @@ import * as networking from "@/networking"
 export let init = async()=>{
 	log.info(`Setting up the firewall`)
 	await utils.exec(`
-iptables -P INPUT DROP
-iptables -P FORWARD DROP
+iptables -P INPUT ACCEPT
+iptables -P FORWARD ACCEPT
 iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT

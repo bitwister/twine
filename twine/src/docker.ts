@@ -38,7 +38,7 @@ export let exec = async(containerId, command)=>{
 	let process = await docker.container.get(containerId).exec.create({
 		AttachStdout: true,
 		AttachStderr: true,
-		Cmd: ["/bin/sh", "-c", command]
+		Cmd: command.split(" ")
 	})
 	let stream = await process.start({ Detach: false })
 	let output = ""
@@ -53,7 +53,7 @@ export let exec = async(containerId, command)=>{
 export let upload = async(containerId, files)=>{
 	let tarArchive = tarStream.pack()
 	for(let [name, data] of Object.entries(files)){
-		tarArchive.entry({name}, data)
+		tarArchive.entry({name, mode: 0o777}, data)
 	}
 	tarArchive.finalize()
 	await docker.container.get(containerId).fs.put(tarArchive, {

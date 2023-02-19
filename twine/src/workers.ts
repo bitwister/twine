@@ -77,12 +77,10 @@ export class NetworkWorker {
 				await docker.upload(container.id, {
 					"/busybox": fs.readFileSync("/busybox")
 				})
-				await docker.exec(container.id, `chmod +x /busybox`)
 			}
 			if(routesChanged){
 				let commands = []
 				
-
 				let commandsDelete = []
 				for(let route of routesOld){
 					if(!route.destinationIp){
@@ -99,7 +97,7 @@ export class NetworkWorker {
 						continue
 					}
 					log.info(`Worker: Created route ${route.network}>${route.destinationIp} for ${container.id}`)
-					commands.push(`/busybox route add ${route.network} gw ${route.destinationIp} metric 1`)
+					commands.push(`/busybox route add ${route.network} gw ${route.destinationIp}`)
 				}
 
 				if(commandsDelete.length){
