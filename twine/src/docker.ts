@@ -21,6 +21,7 @@ export let init = async()=>{
 				if(event.Type == "container" && ["restart", "start", "stop", "update"].indexOf(event.Action) != -1){
 					let container: types.Container = {
 						id:	event.Actor.ID,
+						name: event.from,
 						routes: utils.parseDockerTwineLabels(event.Actor.Attributes).routes
 					}
 					events.emit("containerUpdate", container)

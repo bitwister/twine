@@ -3,6 +3,7 @@ import fs from "fs"
 import * as log from "@/log"
 import * as types from "@/types"
 import * as firewall from "@/firewall"
+import * as networking from "@/networking"
 import * as utils from "@/utils"
 import config from "@/config"
 
@@ -63,7 +64,10 @@ chmod +x /usr/bin/easyrsa
 	async startServer(){
 		log.info(`OpenVPN: Starting server`)
 		try{await utils.exec(`killall openvpn`, {log: false})}catch(error){}
-		setTimeout(firewall.iptables.updateInterfaces, 3000) // TODO: Better solution
+		networking.waitForTun().then(async()=>{
+			await firewall.iptables.setupTunnel()
+			await firewall.iptables.forwardAll()
+		})
 		this.process = await utils.exec(`/usr/sbin/openvpn --config /config/openvpn/server.ovpn `, {
 			// signal: this.abortController,
 			// wait: false
@@ -73,7 +77,10 @@ chmod +x /usr/bin/easyrsa
 	async startClient(){
 		log.info(`OpenVPN: Starting client`)
 		try{await utils.exec(`killall openvpn`, {log: false})}catch(error){}
-		setTimeout(firewall.iptables.updateInterfaces, 3000) // TODO: Better solution
+		networking.waitForTun().then(async()=>{
+			await firewall.iptables.setupTunnel()
+			await firewall.iptables.forwardAll()
+		})
 		this.process = await utils.exec(`/usr/sbin/openvpn --config /config/openvpn/client.ovpn`, {
 			// signal: this.abortController,
 			// wait: false

@@ -24,7 +24,6 @@ export class NetworkWorker {
 		this.cancelSchedule = utils.schedule(async()=>{
 			this.discover()
 		}, {every: 1000 * 60 * 5})
-		await this.forward()
 	}
 
 	async stop(){
@@ -54,6 +53,12 @@ export class NetworkWorker {
 			routesChanged = true
 		}
 
+		// console.log(container.id, container.routes)
+
+		if(!container.routes.length){
+			return;
+		}
+
 		// Grab a lock only if needed
 		if(!container.lock || Number(new Date()) - container.lock.updated > container.lock.ttl){
 			let output = await docker.exec(container.id, `cat /.twinie.lock`)
@@ -65,6 +70,7 @@ export class NetworkWorker {
 		}
 
 		if(!container.lock || container.lock.owner == this.hostname || Number(new Date()) - container.lock.updated > container.lock.ttl){
+			// routesChanged = true
 			await docker.upload(container.id, {
 				"/.twinie.lock": JSON.stringify({
 					owner: this.hostname,
@@ -79,39 +85,19 @@ export class NetworkWorker {
 				})
 			}
 			if(routesChanged){
-				let commands = []
-				
-				let commandsDelete = []
+				await docker.exec(container.id, `/busybox route del -net 0.0.0.0/0 gw 172.19.0.1`)
+				await docker.exec(container.id, `/busybox route add -net 172.19.0.0/24 gw 172.19.0.1`)
+
 				for(let route of routesOld){
-					if(!route.destinationIp){
-						// TODO: Is this enough?
-						continue;	
-					}
-					commands.push(`/busybox route del ${route.network} gw $(getent hosts ${route.destinationIp}`)
+					log.info(`Worker: Created route ${route.network}>${route.destination} on ${container.name}`)
+					await docker.exec(container.id, `/busybox route del -net ${route.network} gw ${route.destination}`).catch(()=>{})
 				}
-
 				for(let route of container.routes){
-					route.destinationIp = (await docker.exec(container.id, `getent hosts ${route.destination} | awk '{ print $1 }'`)).match(/(\d+\.\d+\.\d+\.\d+)/)[1]
-					if(!route.destinationIp){
-						log.error(`Failed resolving route destination "${route.destination}" on container.id:${container.id}`)
-						continue
-					}
-					log.info(`Worker: Created route ${route.network}>${route.destinationIp} for ${container.id}`)
-					commands.push(`/busybox route add ${route.network} gw ${route.destinationIp}`)
+					log.info(`Worker: Created route ${route.network}>${route.destination} on ${container.name}`)
+					await docker.exec(container.id, `/busybox route add -net ${route.network} gw ${route.destination}`)
 				}
-
-				if(commandsDelete.length){
-					await docker.exec(container.id, commandsDelete.join(" | "))
-				}
-
-				await docker.exec(container.id, commands.join(" && "))
 			}
 		}
-
-		await docker.upload(container.id, {
-			// TODO: Repalce busybox payload with bundeled twine (zero dependency remote control)
-			"/busybox": fs.readFileSync("/busybox"),
-		})
 
 		this.containers.push(container)
 	}
@@ -126,6 +112,7 @@ export class NetworkWorker {
 			let labelConfig = utils.parseDockerTwineLabels(containerDocker.data.Labels)
 			let container: types.Container = {
 				id: containerDocker.id,
+				name: containerDocker.data.Names[0].replace(/\//g, ""),
 				routes: labelConfig.routes,
 			}
 			this.manage(container)

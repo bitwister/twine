@@ -21,6 +21,19 @@ export let interfaces = async(): Promise<Array<types.Interface>> =>{
 	return interfaces
 }
 
+export let parseRoutes = (data)=>{
+	let routes = []
+	for(let [_, destination, gateway, mask, metric] of data.matchAll(/^([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)\s+\w+\s+(\d+)\s+/gm)){
+		routes.push({
+			destination,
+			gateway,
+			mask,
+			metric: Number(metric)
+		})
+	}
+	return routes
+}
+
 export let setNameservers = async(nameservers: Array<string>)=>{
 	let data = ""
 	for(let nameserver of nameservers){
@@ -37,6 +50,12 @@ mknod /dev/net/tun c 10 200
 chmod 600 /dev/net/tun
 		`, {log: false})
 	}catch(error){}
+}
+
+export let waitForTun = async()=>{
+	await utils.wait(async ()=>{
+		return (await utils.exec("ifconfig", {log: false})).match(/^tun0\s+/m)
+	})
 }
 
 export default exports

@@ -54,6 +54,13 @@ export let schedule = (handler, {
 	}
 }
 
+export let wait = async(condition, {timeout=240000, interval=1000}={})=>{
+	for(let i=0; i<=Math.round(timeout/interval); i++){
+		if( await condition() ) return
+		await sleep(interval)
+	}
+}
+
 export let exec = async(commands, options:any={})=>{
 	if(options.wait === undefined) options.wait = true;
 	if(options.log === undefined) options.log = true;
@@ -69,7 +76,6 @@ export let exec = async(commands, options:any={})=>{
 		command = command.trim()
 		if(!command) continue;
 		let subprocess = childProcess.spawn(command.split(" ")[0], command.split(" ").slice(1), options)
-		
 		let callback = (pipe, data)=>{
 			try{
 				if(options.log){
@@ -109,16 +115,16 @@ export let parseDockerTwineLabels = (labels)=>{
 		routes: []
 	}
 	for(let [key, value] of Object.entries(labels) as Array<[string, string]>){
-		if(key == "twine.route"){
-			let [network, destination] = value.trim().split(">", 2)
-			output.routes.push({
-				network,
-				destination,
-			})
+		if(key == "twine.routes"){
+			for(let [_, network, destination] of value.matchAll(/(\d+\.\d+\.\d+\.\d+\/\d+|default)\>([^\s]+)/g)){
+				output.routes.push({
+					network,
+					destination,
+				})
+			}
 		}
 	}
 	return output
 }
 
 export default exports
-

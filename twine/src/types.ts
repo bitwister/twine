@@ -25,6 +25,7 @@ export type ContainerRoute = {
 
 export type Container = {
 	id: string,
+	name: string,
 	routes: Array<ContainerRoute>,
 	lock?: ContainerLock
 }
