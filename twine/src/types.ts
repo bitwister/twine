@@ -4,6 +4,13 @@ import moment from "moment"
 import * as utils from "@/utils"
 import config from "@/config"
 
+export type IPRoute = {
+	destination: string
+	gateway: string
+	mask: string
+	metric: number
+}
+
 export type Interface = {
 	name: string
 	network: string
@@ -20,7 +27,6 @@ export type ContainerLock = {
 export type ContainerRoute = {
 	network: string, 
 	destination: string
-	destinationIp?: string
 }
 
 export type Container = {

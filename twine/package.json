@@ -11,6 +11,7 @@
 	"private": true,
 	"license": "UNLICENSE",
 	"dependencies": {
+		"netmask": "2.0.2",
 		"axios": "0.21.0",
 		"uuid": "^3.3.2",
 		"js-sha256": "0.9.0",

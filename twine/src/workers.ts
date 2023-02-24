@@ -1,5 +1,7 @@
 import fs from "fs"
+import * as netmask from "netmask"
 
+import * as networking from "@/networking"
 import * as docker from "@/docker"
 import * as utils from "@/utils"
 import * as log from "@/log"
@@ -11,13 +13,11 @@ export class NetworkWorker {
 	
 	// On a system with multiple twine containers running, its important 
 	// that only one of them manages external containers with special twine labels
-	containers: Array<types.Container> = []
+	managedContainers: Array<types.Container> = []
 	cancelSchedule: Function
 	hostname: string
 	
-	constructor(){
-
-	}
+	constructor(){}
 
 	async start(){
 		this.hostname = fs.readFileSync("/etc/hostname", {encoding: "utf8"}).trim()
@@ -28,83 +28,113 @@ export class NetworkWorker {
 
 	async stop(){
 		this.cancelSchedule()
-		for(let container of this.containers){
+		for(let container of this.managedContainers){
 			this.forget(container.id)
 		}
 	}
 	
 	async manage(container: types.Container){
 
-		let routesOld = []
-		let routesChanged = false
-		let _container = this.containers.find(_container=>_container.id==container.id)
-		if(_container){
-			if(JSON.stringify(container.routes) != JSON.stringify(_container.routes)){
-				// Container labels "twine.route" have changed
-				routesOld = _container.routes || []
+		if(!container.routes.length) return;
+		let router = new networking.Router((command)=>docker.exec(container.id, `/busybox ${command}`))
+		let managedContainer = this.managedContainers.find(_container=>_container.id==container.id)
+		if(managedContainer){
+			if(JSON.stringify(container.routes) != JSON.stringify(managedContainer.routes)){
 				container = {
-					..._container,
+					...managedContainer,
 					routes: container.routes
 				}
-				routesChanged = true
-			}
-		}else{
-			// Seeing container first time
-			routesChanged = true
-		}
-
-		// console.log(container.id, container.routes)
-
-		if(!container.routes.length){
-			return;
-		}
-
-		// Grab a lock only if needed
-		if(!container.lock || Number(new Date()) - container.lock.updated > container.lock.ttl){
-			let output = await docker.exec(container.id, `cat /.twinie.lock`)
-			if(output){
-				try{
-					container.lock = JSON.parse(output)
-				}catch(error){}
 			}
 		}
 
-		if(!container.lock || container.lock.owner == this.hostname || Number(new Date()) - container.lock.updated > container.lock.ttl){
-			// routesChanged = true
-			await docker.upload(container.id, {
-				"/.twinie.lock": JSON.stringify({
-					owner: this.hostname,
-					created: Number(new Date()),
-					updated: Number(new Date()),
-					ttl: 1000 * 60 * 10
-				}),
-			})
+		// Because multiple twine instances could be running on the same docker host
+		//  to avoid logic collision a lock mechanism is implemented
+		let output = await docker.exec(container.id, `cat /.twine.lock`)
+		if(output){
+			try{
+				container.lock = JSON.parse(output)
+			}catch(error){}
+		}
+		if(!container.lock){
 			if(!(await docker.exec(container.id, `stat /busybox`)).match(/Access\:/)){
 				await docker.upload(container.id, {
 					"/busybox": fs.readFileSync("/busybox")
 				})
 			}
-			if(routesChanged){
-				await docker.exec(container.id, `/busybox route del -net 0.0.0.0/0 gw 172.19.0.1`)
-				await docker.exec(container.id, `/busybox route add -net 172.19.0.0/24 gw 172.19.0.1`)
-
-				for(let route of routesOld){
-					log.info(`Worker: Created route ${route.network}>${route.destination} on ${container.name}`)
-					await docker.exec(container.id, `/busybox route del -net ${route.network} gw ${route.destination}`).catch(()=>{})
-				}
-				for(let route of container.routes){
-					log.info(`Worker: Created route ${route.network}>${route.destination} on ${container.name}`)
-					await docker.exec(container.id, `/busybox route add -net ${route.network} gw ${route.destination}`)
-				}
+			container.lock = {
+				owner: this.hostname,
+				created: Number(new Date()),
+				updated: Number(new Date()),
+				ttl: 1000 * 60 * 10
 			}
 		}
 
-		this.containers.push(container)
+		if(container.lock.owner != this.hostname) return;
+
+		container.lock.updated = Number(new Date())
+		await docker.upload(container.id, {
+			"/.twine.lock": JSON.stringify(container.lock)
+		})
+
+		let routesCurrent = await router.fetch()
+		let routeDocker = routesCurrent.find(route=>
+			route.gateway == "0.0.0.0" 
+				&& 
+			route.mask == "255.255.0.0"
+		)
+		let gatewayDocker = routeDocker.destination.replace(/\.0$/m, ".1")
+		let routeDefault = routesCurrent.find(route=>
+			route.destination == "0.0.0.0" 
+				&& 
+			route.mask == "0.0.0.0" 
+				&& 
+			route.metric == 0
+				&&
+			route.gateway == gatewayDocker
+		)
+
+		if(routeDefault){
+			await router.del(routeDefault)
+			await router.add({
+				...routeDefault,
+				metric: 1
+			})
+		}
+
+		for(let containerRoute of container.routes){
+			let network = new netmask.Netmask(containerRoute.network)
+			let destinationIp = containerRoute.destination
+			if(destinationIp.toLowerCase() == "docker_gateway"){
+				destinationIp = gatewayDocker
+			}else if(!destinationIp.match(/^([\d\.]+)\.([\d\.]+)\.([\d\.]+)$/m)){
+				destinationIp = (await docker.exec(container.id, `/busybox nslookup ${containerRoute.destination}`)).match(/answer\:.*?Address\:\s+([\d\.]+)/sm)[1]
+			}
+			let route: types.IPRoute = {
+				gateway: destinationIp,
+				destination: network.base,
+				mask: network.mask,
+				metric: 0
+			}
+			if(!routesCurrent.find(_route=>
+				_route.destination == route.destination
+					&& 
+				_route.gateway == route.gateway
+					&& 
+				_route.mask == route.mask
+			)){
+				log.info(`Worker: Created route ${containerRoute.network}>${containerRoute.destination} on ${container.name}`)
+				await router.add(route)
+			}
+		}
+
+		// TODO: Come up with an automated solution to the external access failure when routing 0.0.0.0/0
+
+		this.managedContainers.push(container)
 	}
 	
 	async forget(containerId){
 		await docker.exec(containerId, `rm -f /.twinie.lock && rm -f /busybox`)
-		this.containers = this.containers.filter((container)=>container.id != containerId)
+		this.managedContainers = this.managedContainers.filter((container)=>container.id != containerId)
 	}
 	
 	async discover(){

@@ -8,96 +8,78 @@ import config from "@/config"
 
 export let init = async()=>{
 	log.info(`Setting up the firewall`)
-	await utils.exec(`
-iptables -P OUTPUT ACCEPT
-iptables -P INPUT ACCEPT
-iptables -P FORWARD ACCEPT
-iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
-iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-iptables -A INPUT -i lo -j ACCEPT
-iptables -A FORWARD -i lo -j ACCEPT
-iptables -A OUTPUT -o lo -j ACCEPT
-iptables -A OUTPUT -d 1.1.1.1 -j ACCEPT
-	`, {log: false})
-
-	await iptables.updateInterfaces()
+	let defaultGateway = (await utils.exec(`ip route`, {log: false})).match(/default\svia\s(.*?)\s/)[1]
+	await iptables.insert([
+		`-P INPUT ACCEPT`,
+		`-P OUTPUT ACCEPT`,
+		`-P FORWARD ACCEPT`,
+		`-A INPUT -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT`,
+		`-A OUTPUT -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT`,
+		`-A FORWARD -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT`,
+		`-A INPUT -i lo -j ACCEPT`,
+		`-A OUTPUT -o lo -j ACCEPT`,
+		`-A FORWARD -i lo -j ACCEPT`,
+		`-A INPUT -i tun+ -j ACCEPT`,
+		`-A FORWARD -i tun+ -j ACCEPT`,
+		`-A FORWARD -o eth+ -j ACCEPT`,
+		`-A OUTPUT -o tun+ -j ACCEPT`,
+		`-t nat -A POSTROUTING -o eth+ -j MASQUERADE`,
+		`-t nat -A POSTROUTING -o tun+ -j MASQUERADE`,
+		`-t nat -A POSTROUTING -o lo -j MASQUERADE`,
+		`-A FORWARD -i tun+ -o eth+ -j ACCEPT`,
+		`-A FORWARD -i eth+ -o tun+ -j ACCEPT`,
+		`-A FORWARD -i eth+ -o lo+ -j ACCEPT`,
+		`-A FORWARD -i lo -o eth+ -j ACCEPT`,
+		`-A FORWARD -i tun+ -o eth+ -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT`,
+		`-A FORWARD -i eth+ -o tun+ -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT`,
+		`-A INPUT -d 10.69.0.0/24 -j ACCEPT`,
+		`-A FORWARD -d 10.69.0.0/24 -j ACCEPT`,
+		`-A INPUT -s ${defaultGateway} -j ACCEPT`,
+		`-A FORWARD -d ${defaultGateway} -j ACCEPT`,
+		`-A FORWARD -s ${defaultGateway} -j ACCEPT`,
+		`-A OUTPUT -d ${defaultGateway} -j ACCEPT`,
+		`-A INPUT -i tun+ -p tcp -m tcp -m multiport --dports 80,443 -j ACCEPT`,
+	])
+	await iptables.forwardAll()
 }
 
 export class IPTables {
 	constructor(){}
-	async fetch(){
-		return [
-			...(await utils.exec(`iptables -S`)).split("\n"),
-			...(await utils.exec(`iptables -t nat -S`)).split("\n").map(rule=>`-t nat ${rule}`)
-		]
-	}
 	async reset(){
 		await this.insert([
 			"-F",
 			"-X",
+			`-t nat -F`,
+			`-t nat -X`,
 			"-P INPUT ACCEPT",
 			"-P FORWARD ACCEPT",
 			"-P OUTPUT ACCEPT",
 		])
 	}
-	async updateInterfaces(){
-		for(let _interface of await networking.interfaces()){
-			if(_interface.name.startsWith("eth")){
-				await this.insert([
-					`-A INPUT -i ${_interface.name} -j ACCEPT`,
-					// `-A INPUT -s ${_interface.network} -j ACCEPT`,
-					`-A FORWARD -i ${_interface.name} -j ACCEPT`,
-					// `-A FORWARD -d ${_interface.network} -j ACCEPT`,
-					// `-A FORWARD -s ${_interface.network} -j ACCEPT`,
-					// `-A OUTPUT -d ${_interface.network} -j ACCEPT`,
-					`-A OUTPUT -o ${_interface.name} -j ACCEPT`,
-				])
-			}
-		}
-	}
 	async check(rule){
 		try{
-			await utils.exec(`iptables ${rule.replace(" -A ", " -C ")}`)
-			return false
+			return !Boolean((await utils.exec(`iptables ${rule.replace(" -A ", " -C ")}`, {log: false})).trim())
 		}catch(error){
-			return true
+			return false
 		}
 	}
 	async insert(rules: Array<string>){
 		for(let rule of rules){
 			if(rule.match(/\s+\-A\s+/) && await this.check(rule)) continue;
-			await utils.exec(`iptables ${rule}`)
+			await utils.exec(`iptables ${rule}`, {log: false})
 		}
 	}
 	async remove(rules){
 		for(let rule of rules){
 			if(!rule.match(/\s+\-A\s+/)) continue;
-			await utils.exec(`iptables ${rule.replace(" -A ", " -D ")}`)
+			await utils.exec(`iptables ${rule.replace(" -A ", " -D ")}`, {log: false})
 		}
 	}
 	async forward({protocol="tcp", sourcePorts, destination, destinationPort}){
-		await this.insert([`-t nat -A PREROUTING -i tun0 -p ${protocol} -m multiport --dports ${sourcePorts.join(",")} -j DNAT --to ${await utils.resolveIp(destination)}:${destinationPort}`])
+		await this.insert([`-t nat -A PREROUTING -i tun+ -p ${protocol} -m multiport --dports ${sourcePorts.join(",")} -j DNAT --to ${await utils.resolveIp(destination)}:${destinationPort}`])
 		log.info(`Forwarded ${sourcePorts}>${destination}:${destinationPort}/${protocol}`)
 	}
-	async setupTunnel(){
-		await this.insert([
-			`-t nat -A POSTROUTING -o tun0 -j MASQUERADE`,
-			`-A OUTPUT -o tun0 -j ACCEPT`,
-			`-A INPUT -i tun0 -j ACCEPT`
-		])
-		for(let _interface of await networking.interfaces()){
-			if(_interface.name.startsWith("eth")){
-				await this.insert([
-					`-A FORWARD -o tun0 -i ${_interface.name} -m conntrack --ctstate NEW -j ACCEPT`,
-				])
-			}
-		}
-	}
-	async forwardAll (){
+	async forwardAll(){
 		for(let [_, ports, destination, destinationPort, protocol] of config.PORTS.matchAll(/^\s*(?:((?:\d+,?)+)+>(.*?)\:(\d+)(?:\/(tcp|udp))?)/mg)){
 			await this.forward({
 				protocol: protocol || "tcp", 

@@ -102,6 +102,7 @@ export let exec = async(commands, options:any={})=>{
 					}
 				})
 			})
+			return output
 		}else{
 			if(commands.length == 1){
 				return subprocess

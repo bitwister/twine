@@ -1,12 +1,10 @@
 # Twine
 
-Next generation docker multi-protocol tunneling container that automatically manages routes/forwarding in/out of your containers.
+Next generation docker multi-protocol tunneling container that automatically manages routes/forwarding in/out of your containers
 
-**NO MORE SHARED NETWORKING ~~(`network_mode: service:vpn`)~~ 😎🎉**
+**NO MORE SHARED NETWORKING ~~(`network_mode: service:vpn`)~~ 😎🎉** 
 
-Spend less time configuring vpn containers, and focus on architecture for your next big project/company/startup
-
-Twine provides many essential features for rapid development: 
+Twine provides essential features for rapid development: 
 - Easily configureable automatic port forwarding 
 - Support for multiple protocols with universal configuration interface (TODO) 
 - Config auto generation based on usecase templates (TODO) 
@@ -34,32 +32,28 @@ services:
     cap_add:
       - NET_ADMIN # Required for twine.route label
     labels:
-      # Route outgoing traffic 0.0.0.0/0 to twine_edge  
-      - twine.route=0.0.0.0/0>twine_edge
-      # This will automatically create/update route to the twine_edge gateway 
-      #  based on latest Docker DNS updates
+      # Route outgoing traffic 0.0.0.0/0 to twine_client  
+      - twine.route=0.0.0.0/0>twine_client
   
-  twine_edge:
+  twine_client:
     image: ghcr.io/bitwister/twine:latest
     restart: unless-stopped
     networks:
-      # For packet forwarding to work, containers must share at-least one network
+      # For the route to work, containers must have a common network
       - main
     volumes:
-      #  Docker access required for managing packet forwarding
+      #  Docker.sock access required for managing packet forwarding
       -  /var/run/docker.sock:/var/run/docker.sock
       - ./config/twine_edge/client.ovpn:/config/openvpn/client.ovpn
     environment:
       MODE: client
       PROTOCOL: openvpn
+      # Forward incomming connections on VPN client's address to
+      # the specified services
       PORTS: >
         80,8080-8090>nginx:80
-        25565:192.168.1.14:25565
       # {port},{port},...:{destination}:{destinationPort}[/tcp|/udp]
-      # Domain names and networks are relative to this container
-      # 80,8080-8090>nginx:80 - Route to internal nginx on common "main" network
-      # 25565:192.168.1.14:25565 - Route minecraft server port to a home network ip
-      
+
     cap_add:
       - NET_ADMIN
 
@@ -72,9 +66,12 @@ networks:
 ### **Environment**
 | Variable | Values | Default | Description |
 | - | - | - | - |
+| LOG_LEVEL | `debug,info` | `info` | Logging level |
 | MODE | `server,client` | `server` | |
 | PROTOCOL | `openvpn` | `openvpn` | |
 | PORTS | `{port},{port...}>{destination}:{port}` | | Port forward incoming VPN traffic |
+| SERVER | `{ip/hostname}` | `curl ipinfo.io` | Server's public address |  
+
 
 ### **Volumes**
 | Mount | Description |
@@ -119,7 +116,7 @@ git clone https://github.com/bitwister/twine.git
 cd twine
 docker-compose up --build
 ```
-- Open docker container via (Remote Development Extension)[https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack] 
+- Open docker container via [Remote Development Extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack)
 
 ### Moneh
 
