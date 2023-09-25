@@ -124,7 +124,7 @@ export let update = async(containerId?: string)=>{
 			}
 		}
 		if(container.gatewayInterface || container.forwarding.length){
-			// TODO: iptables namespace isolation
+			// TODO: simplify
 			await docker.execNS(container.pid, `echo 1 > /proc/sys/net/ipv4/ip_forward`)
 			await iptables.insert([
 				`-D INPUT -j TWINE_INPUT`,
