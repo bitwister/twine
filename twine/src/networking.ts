@@ -65,6 +65,26 @@ export class IPTables {
 	}
 }
 
+export class NetworkInterfaces {
+	exec: (command: string) => Promise<string>
+	constructor(exec?: (command: string) => Promise<string>){
+		this.exec = exec || ((command)=>utils.exec(command) as any)
+	}
+	async fetch(): Promise<any>{
+		let interfaces = {}
+		let output = await this.exec(`ip addr`)
+		for(let [_, _interface, data] of (output+"\n\n").matchAll(/^\d+\:\s(.*?)\:(.*?)(?=^\d|\n\n)/gms)){
+			let address = data.match(/inet\s(.*?)\//)
+			if(address){
+				interfaces[_interface] = address[1]
+			}
+		}
+		return interfaces
+	}
+}
+
 export let iptables = new IPTables()
+export let router = new Router()
+export let networkInterfaces = new NetworkInterfaces()
 
 export default exports

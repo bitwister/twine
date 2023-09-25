@@ -77,6 +77,7 @@ export let update = async(containerId?: string)=>{
 	for(let container of containers){
 		let router = new networking.Router((command)=>docker.execNS(container.pid, command))
 		let iptables = new networking.IPTables((command)=>docker.execNS(container.pid, command))
+		let networkInterfaces = new networking.NetworkInterfaces((command)=>docker.execNS(container.pid, command))
 		if(container.routes.length){
 			let routesCurrent = await router.fetch()
 			// Change default route metric to 1
@@ -124,16 +125,13 @@ export let update = async(containerId?: string)=>{
 			}
 		}
 		if(container.gatewayInterface || container.forwarding.length){
+			let interfaces = await networkInterfaces.fetch()
 			// TODO: simplify
 			await docker.execNS(container.pid, `echo 1 > /proc/sys/net/ipv4/ip_forward`)
 			await iptables.insert([
-				`-D INPUT -j TWINE_INPUT`,
-				`-D OUTPUT -j TWINE_OUTPUT`,
 				`-D FORWARD -j TWINE_FORWARD`,
 				`-t nat -D POSTROUTING -j TWINE_POSTROUTING`,
 				`-t nat -D PREROUTING -j TWINE_PREROUTING`,
-				`-F TWINE_INPUT`,
-				`-F TWINE_OUTPUT`,
 				`-F TWINE_FORWARD`,
 				`-t nat -F TWINE_POSTROUTING`,
 				`-t nat -F TWINE_PREROUTING`,
@@ -141,31 +139,26 @@ export let update = async(containerId?: string)=>{
 			await iptables.insert([
 				`-P INPUT ACCEPT`,
 				`-P OUTPUT ACCEPT`,
-				`-P FORWARD DROP`,
+				`-P FORWARD ACCEPT`,
 				`-t nat -P PREROUTING ACCEPT`,
 				`-t nat -P POSTROUTING ACCEPT`,
-				`-N TWINE_INPUT`,
-				`-N TWINE_OUTPUT`,
 				`-N TWINE_FORWARD`,
 				`-t nat -N TWINE_POSTROUTING`,
 				`-t nat -N TWINE_PREROUTING`,
-				`-A INPUT -j TWINE_INPUT`,
-				`-A OUTPUT -j TWINE_OUTPUT`,
 				`-A FORWARD -j TWINE_FORWARD`,
 				`-t nat -A POSTROUTING -j TWINE_POSTROUTING`,
 				`-t nat -A PREROUTING -j TWINE_PREROUTING`,
-				`-A TWINE_FORWARD -i eth+ -o eth+ -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT`,
 				`-t nat -A TWINE_POSTROUTING -o eth+ -j MASQUERADE`,
 			], {force: true})
 			if(container.gatewayInterface){
 				await iptables.insert([
-					`-A TWINE_FORWARD -i ${container.gatewayInterface} -o eth+ -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT`,
-					`-A TWINE_FORWARD -i eth+ -o ${container.gatewayInterface} -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT`,
+					`-A TWINE_FORWARD -d ${container.name} -o ${container.gatewayInterface} -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT`,
 					`-t nat -A TWINE_POSTROUTING -o ${container.gatewayInterface} -j MASQUERADE`,
 				])
 			}
 		}
 		if(container.forwarding.length){
+			let interfaces = await networkInterfaces.fetch()
 			for(let forward of container.forwarding){
 				let destinationIp = forward.destination
 				if(!destinationIp.match(/^([\d\.]+)\.([\d\.]+)\.([\d\.]+)$/m)){
@@ -176,11 +169,13 @@ export let update = async(containerId?: string)=>{
 						continue
 					}
 				}
-				if(await iptables.insert([
-					`-t nat -A TWINE_PREROUTING -i eth+ -p ${forward.protocol} -m multiport --dports ${forward.sourcePort} -j DNAT --to ${destinationIp}:${forward.destinationPort}`,
-					`-t nat -A TWINE_PREROUTING -i wg+ -p ${forward.protocol} -m multiport --dports ${forward.sourcePort} -j DNAT --to ${destinationIp}:${forward.destinationPort}`,
-					`-t nat -A TWINE_PREROUTING -i lo -p ${forward.protocol} -m multiport --dports ${forward.sourcePort} -j DNAT --to ${destinationIp}:${forward.destinationPort}`,
-				])){
+
+				let rules = []
+				for(let [_interface, address] of Object.entries(interfaces)){
+					rules.push(`-t nat -A TWINE_PREROUTING -d ${address} -p ${forward.protocol} -m multiport --dports ${forward.sourcePort} -j DNAT --to ${destinationIp}:${forward.destinationPort}`)
+				}
+
+				if(await iptables.insert(rules)){
 					log.info(`Forwarded ${container.name}:${forward.sourcePort}>${forward.destination}:${forward.destinationPort}/${forward.protocol}`)
 				}
 			}
@@ -223,9 +218,9 @@ async function init(){
 				}
 			}
 
-			await containers["twine-wireguard-client-1"].test(`curl -sS localhost:9080`)
-			await containers["twine-wireguard-client-1"].test(`curl -sS 10.250.0.2:9080`)
-			await containers["twine-wireguard-client-1"].test(`curl -sS wireguard-client:9080`)
+			await containers["twine-wireguard-client-1"].test(`curl -sS localhost:80`)
+			await containers["twine-wireguard-client-1"].test(`curl -sS 10.250.0.2:80`)
+			await containers["twine-wireguard-client-1"].test(`curl -sS wireguard-client:80`)
 			await containers["twine-wireguard-client-1"].test(`curl -sS ipinfo.io`)
 			await containers["twine-wireguard-client-1"].test(`curl -sS 10.250.0.1:80`)
 
@@ -233,14 +228,18 @@ async function init(){
 			await containers["twine-qbittorrent-1"].test(`traceroute -m 2 10.250.0.1`)
 			await containers["twine-qbittorrent-1"].test(`curl -sS ipinfo.io`)
 			await containers["twine-qbittorrent-1"].test(`curl -sS 10.250.0.1:80`)
-			await containers["twine-qbittorrent-1"].test(`curl -sS 10.250.0.2:9080`)
-			await containers["twine-qbittorrent-1"].test(`curl -sS wireguard-client:9080`)
+			await containers["twine-qbittorrent-1"].test(`curl -sS 10.250.0.2:80`)
+			await containers["twine-qbittorrent-1"].test(`curl -sS wireguard-client:80`)
 
 			await containers["twine-wireguard-server-1"].test(`curl -sS localhost:80`)
 			await containers["twine-wireguard-server-1"].test(`curl -sS 10.250.0.1:80`)
 			await containers["twine-wireguard-server-1"].test(`curl -sS wireguard-server:80`)
 			await containers["twine-wireguard-server-1"].test(`curl -sS ipinfo.io`)
-			await containers["twine-wireguard-server-1"].test(`curl -sS 10.250.0.2:9080`)
+			await containers["twine-wireguard-server-1"].test(`curl -sS 10.250.0.2:80`)
+
+			await containers["twine-helloworld-1"].test(`curl -sS ipinfo.io`)
+			await containers["twine-helloworld-1"].test(`curl -sS wireguard-server:80`)
+
 		}
 
 		while(true){
