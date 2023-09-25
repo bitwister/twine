@@ -153,6 +153,7 @@ export let update = async(containerId?: string)=>{
 			if(container.gatewayInterface){
 				await iptables.insert([
 					`-A TWINE_FORWARD -d ${container.name} -o ${container.gatewayInterface} -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT`,
+					`-A TWINE_FORWARD -i ${container.gatewayInterface} -s ${container.name} -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT`,
 					`-t nat -A TWINE_POSTROUTING -o ${container.gatewayInterface} -j MASQUERADE`,
 				])
 			}
