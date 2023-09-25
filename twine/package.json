@@ -12,16 +12,9 @@
 	"license": "UNLICENSE",
 	"dependencies": {
 		"netmask": "2.0.2",
-		"axios": "0.21.0",
-		"uuid": "^3.3.2",
-		"js-sha256": "0.9.0",
-		"moment": "2.29.4",
-		"glob": "8.0.3",
-		"semaphore-async-await": "1.5.1",
 		"node-docker-api": "1.1.22",
 		"neodoc": "2.0.2",
 		"tmp": "0.2.1",
-		"dns-lookup-cache": "1.0.4",
 		"tar-stream": "3.0.0"
 	},
 	"devDependencies": {	

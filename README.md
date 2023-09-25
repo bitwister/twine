@@ -1,64 +1,64 @@
 # Twine
 
-Next generation docker multi-protocol tunneling container that automatically manages routes/forwarding in/out of your containers
+Automated management of Docker container networking via labels. 
 
 **NO MORE SHARED NETWORKING ~~(`network_mode: service:vpn`)~~ 😎🎉** 
 
-Twine provides essential features for rapid development: 
-- Easily configureable automatic port forwarding 
-- Support for multiple protocols with universal configuration interface (TODO) 
-- Config auto generation based on usecase templates (TODO) 
-- Simple CLI/API interface for management and config creation
-
-**Supported protocols**
-- **OpenVPN** - Client/Server
-- **WireGuard** - (TODO)
-- **IPSec** - (TODO)
-- **Tor** - (TODO)
-
 ## Deploy
 ```yml
-version: "3.7"
+version: "3"
 services:
-
-  nginx:
-    image: nginx:latest
-    networks:
-      - main
-    volumes: 
-      - ./config/nginx/static:/usr/share/nginx/html
-    ports:
-      - 0.0.0.0:80:80
-    cap_add:
-      - NET_ADMIN # Required for twine.route label
-    labels:
-      # Route outgoing traffic 0.0.0.0/0 to twine_client  
-      - twine.route=0.0.0.0/0>twine_client
   
-  twine_client:
+  twine:
     image: ghcr.io/bitwister/twine:latest
     restart: unless-stopped
-    networks:
-      # For the route to work, containers must have a common network
-      - main
     volumes:
-      #  Docker.sock access required for managing packet forwarding
-      -  /var/run/docker.sock:/var/run/docker.sock
-      - ./config/twine_edge/client.ovpn:/config/openvpn/client.ovpn
-    environment:
-      MODE: client
-      PROTOCOL: openvpn
-      # Forward incomming connections on VPN client's address to
-      # the specified services
-      PORTS: >
-        80,8080-8090>nginx:80
-      # {port},{port},...:{destination}:{destinationPort}[/tcp|/udp]
-
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /proc:/host/proc
+    privileged: true
+  
+  wireguard-client:
+    image: lscr.io/linuxserver/wireguard:latest
+    restart: unless-stopped
+    networks:
+      - main
     cap_add:
       - NET_ADMIN
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ./config/wireguard/wg0.conf:/config/wg0.conf:ro
+    labels:
+      # Interface for forwarding traffic (Required for "twine.route.*=wireguard-client" to work) 
+      - twine.gateway.interface=wg+
+      # Expose qbittorrent on WireGuard Client ip address
+      - twine.forward.9080=qbittorrent:9080
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    restart: unless-stopped
+    networks:
+      - main
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - WEBUI_PORT=9080
+    ports:
+      - 127.0.0.1:9080:9080
+    labels:
+      # Route all outgoing traffic via WireGuard Client
+      - twine.route.0.0.0.0/1=wireguard-client
+      - twine.route.128.0.0.0/1=wireguard-client
+      # Route only internal subnet via WireGuard Client
+      # - twine.route.10.250.0.0/24=wireguard-client
 
 networks:
-	main
+  main:
 ```
 
 ## API
@@ -66,46 +66,20 @@ networks:
 ### **Environment**
 | Variable | Values | Default | Description |
 | - | - | - | - |
-| LOG_LEVEL | `debug,info` | `info` | Logging level |
-| MODE | `server,client` | `server` | |
-| PROTOCOL | `openvpn` | `openvpn` | |
-| PORTS | `{port},{port...}>{destination}:{port}` | | Port forward incoming VPN traffic |
-| SERVER | `{ip/hostname}` | `curl ipinfo.io` | Server's public address |  
-
+| `LOG_LEVEL` | `debug,info` | `info` | Logging level |
 
 ### **Volumes**
-| Mount | Description |
+| Container path | Description |
 | - | - |
-| /var/run/docker.sock | Docker mangement socket |
-| /config | Configuration files for all protocols |
-| /config/openvpn/server.ovpn |  |
-| /config/openvpn/client.ovpn |  |
-| /config/openvpn/pki |  |
-| /config/openvpn/clients |  |
-
+| `/var/run/docker.sock` | Docker mangement socket |
+| `/host/proc` | Host machine /proc access (Used for network layer patching) |
 
 ### **Labels**
-| Name | Values | Description |
+| Name | Example | Description |
 | - | - | - |
-| twine.route | `{CIDR}>{destination}` | `server` | Route `{CIDR}` to the `{destination}` |
-
-
-### **CLI**
-
-You can call CLI interface with: 
-
-`docker exec -ti <container> twine --help` 
-
-```
-Usage:
-	twine start 
-	twine cleanup
-	twine openvpn-add <username>
-	twine openvpn-revoke <username>
-
-Options:
-	-h, --help 
-```
+| `twine.gateway.interface` | `wg+` | Interface for forwarding incoming traffic (Required for "twine.route.*=" to work)  |
+| `twine.forward.<sourcePort>[/tcp\|udp]=<destination>:<port>` | `twine.forward.9080=qbittorrent:9080` | Forward incoming connections on sourcePort to specified destination | 
+| `twine.route.<network>=<destination>` | `twine.route.10.250.0.0/24=wireguard-client` | Route specified network to the specified destination |
 
 ## Contribute
 
@@ -116,7 +90,6 @@ git clone https://github.com/bitwister/twine.git
 cd twine
 docker-compose up --build
 ```
-- Open docker container via [Remote Development Extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack)
 
 ### Moneh
 

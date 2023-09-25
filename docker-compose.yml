@@ -1,57 +1,94 @@
 # This docker-compose file is used for local development
-version: "3.7"
+version: "3"
 services:
 
-  nginx:
-    image: nginx:latest
-    networks:
-      - main
-    volumes: 
-      - ./config/nginx/static:/usr/share/nginx/html
-    ports:
-      - 80:80
-    cap_add:
-      - NET_ADMIN
-    labels:
-      - twine.route=0.0.0.0/0>twine_client
+# Twine
+  twine:
+    build: ./twine
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /proc:/host/proc
+      - ./twine:/app_live/ # Important for ./develop_in_container.sh
+    environment:
+      - DEV=true
+    privileged: true
+    command: ./develop_in_container.sh
 
-  twine_server:
-    build: ./twine
+# Client side
+  wireguard-client:
+    image: lscr.io/linuxserver/wireguard:latest
+    restart: unless-stopped
+    depends_on:
+      - wireguard-server
+    networks:
+      - client
+      - server
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ./config/wireguard-server/peer1/peer1.conf:/config/wg0.conf:ro
+    labels:
+      # Interface for forwarding traffic (Required for "twine.route.*=wireguard-client" to work) 
+      - twine.gateway.interface=wg+
+      # Expose qbittorrent on WireGuard Client ip address
+      - twine.forward.9080=qbittorrent:9080
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
     restart: unless-stopped
     networks:
-      - main
-    volumes:
-      - ./twine/src/:/app/src/
-      -  /var/run/docker.sock:/var/run/docker.sock
-      - ./config/twine_server/:/config
-      - ./data/twine_server/:/data
+      - client
     environment:
-      MODE: server
-      SERVER: openvpn
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - WEBUI_PORT=9080
     ports:
-      - 0.0.0.0:1193:1194/tcp
-    cap_add:
-      - NET_ADMIN
-    command: npm run develop
-  
-  twine_client:
-    build: ./twine
+      - 127.0.0.1:9080:9080
+    labels:
+      # Route all outgoing traffic via WireGuard Client
+      - twine.route.0.0.0.0/1=wireguard-client
+      - twine.route.128.0.0.0/1=wireguard-client
+      # Route only internal subnet via WireGuard Client
+      # - twine.route.10.250.0.0/24=wireguard-client
+
+# Server side 
+  wireguard-server:
+    image: lscr.io/linuxserver/wireguard:latest
     restart: unless-stopped
     networks:
-      - main
-    volumes:
-      - ./twine/src/:/app/src/
-      -  /var/run/docker.sock:/var/run/docker.sock
-      - ./config/twine_client/:/config
-      - ./data/twine_client/:/data
-    environment:
-      MODE: client
-      CLIENT: openvpn
-      PORTS: >
-        80,8080>nginx:80/tcp
+      - server
     cap_add:
       - NET_ADMIN
-    command: npm run develop
+      - SYS_MODULE 
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - SERVERURL=wireguard-server
+      - ALLOWEDIPS=0.0.0.0/0
+      - PEERS=1
+      - INTERNAL_SUBNET=10.250.0.0/24
+    volumes:
+      - ./config/wireguard-server:/config
+      - /lib/modules:/lib/modules
+    labels:
+      # Expose qbittorrent on WireGuard Server ip address
+      - twine.forward.80=helloworld
+
+  helloworld:
+    image: nginxdemos/hello
+    restart: unless-stopped
+    networks:
+      - server
 
 networks:
-  main:
+  client:
+  server:

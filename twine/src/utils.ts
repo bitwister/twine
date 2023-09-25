@@ -1,14 +1,9 @@
 import fs from "fs"
 import process from "process"
 import childProcess from "child_process"
-import dns from "dns"
-import dnsLookupCache from "dns-lookup-cache"
 import tmp from "tmp"
 
 import * as log from "@/log"
-import * as types from "@/types"
-import * as errors from "@/errors"
-import config from "@/config"
 
 export let sleep = (ms)=>{
 	return new Promise(resolve => setTimeout(resolve, ms))
@@ -16,19 +11,6 @@ export let sleep = (ms)=>{
 
 export let copy = (value)=>{
 	return JSON.parse(JSON.stringify(value))
-}
-
-export let resolveIp = async(hostname)=>{
-	return await new Promise((resolve, reject)=>{
-		dnsLookupCache.lookup(hostname, {family: 4}, (error, address)=>{ 
-		// dns.lookup(hostname, {family: 4}, (error, address)=>{
-			if(error || !address){
-				reject(error || new Error("Could not resolve ipv4"))
-			}else{
-				resolve(address)
-			}
-		})
-	})
 }
 
 export let schedule = (handler, {
@@ -61,9 +43,16 @@ export let wait = async(condition, {timeout=240000, interval=1000}={})=>{
 	}
 }
 
-export let exec = async(commands, options:any={})=>{
-	if(options.wait === undefined) options.wait = true;
-	if(options.log === undefined) options.log = true;
+export let exec = async(commands, options: {
+	wait?: Boolean,
+	log?: Boolean,
+	ignore?: Boolean,
+	cwd?: any,
+	env?: any,
+}={})=>{
+	if(options.wait == undefined) options.wait = true;
+	if(options.log == undefined) options.log = false;
+	if(options.ignore == undefined) options.ignore = false;
 	if(commands.length > 1024*10){
 		// Optimization for bulk execution
 		let tempFile = tmp.tmpNameSync()
@@ -71,15 +60,17 @@ export let exec = async(commands, options:any={})=>{
 		commands = `/bin/sh ${tempFile}`
 	}
 	let output = ""
-	commands = commands.split("\n")
+	commands = commands.replace(/\r/g, "").split("\n").map(command=>command.trim()).filter(command=>command)
 	for(let command of commands){
-		command = command.trim()
-		if(!command) continue;
-		let subprocess = childProcess.spawn(command.split(" ")[0], command.split(" ").slice(1), options)
-		let callback = (pipe, data)=>{
+		let subprocess = childProcess.spawn(command, [], {
+			shell: true,
+			cwd: options.cwd,
+			env: options.env
+		})
+		let callback = (data)=>{
 			try{
 				if(options.log){
-					process[pipe].write(data.toString("utf8"))
+					process.stdout.write(data.toString("utf8"))
 				}
 				if(options.wait && commands.length == 1 && output.length < 1024*1024*10){
 					output += data.toString("utf8")
@@ -88,44 +79,29 @@ export let exec = async(commands, options:any={})=>{
 				log.debug(`Failed decoding exec output`, error)
 			}
 		}
-		subprocess.stdout.on("data", data=>callback("stdout", data))
-		subprocess.stderr.on("data", data=>callback("stderr", data))
+		subprocess.stdout.on("data", callback)
+		subprocess.stderr.on("data", callback)
 
 		if(options.wait){
 			await new Promise((resolve, reject)=>{
 				subprocess.on("error", reject)
 				subprocess.on("close", (code)=>{
-					if(code !== 0 && !options.ignoreCode){
-						reject(new errors.GenericError(`${command}: exec returned code:${code}`))
+					if(code !== 0 && !options.ignore){
+						reject(new Error(`${command}: exec returned code:${code}`))
 					}else{
-						resolve(0)
+						resolve(null)
 					}
 				})
 			})
-			return output
+			if(commands.length == 1){
+				return output
+			}
 		}else{
 			if(commands.length == 1){
 				return subprocess
 			}
 		}
 	}
-}
-
-export let parseDockerTwineLabels = (labels)=>{
-	let output = {
-		routes: []
-	}
-	for(let [key, value] of Object.entries(labels) as Array<[string, string]>){
-		if(key == "twine.routes"){
-			for(let [_, network, destination] of value.matchAll(/(\d+\.\d+\.\d+\.\d+\/\d+|default)\>([^\s]+)/g)){
-				output.routes.push({
-					network,
-					destination,
-				})
-			}
-		}
-	}
-	return output
 }
 
 export default exports
