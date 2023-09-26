@@ -1,10 +1,19 @@
 # Twine
+### Automated management of Docker container networking via labels. 
 
-Automated management of Docker container networking via labels. 
+Currently for Routing/Traffic forwarding existing implementations rely on `network_mode: service:vpn`, which merges existing networks into one, creating some limitations and making it harder to write/read complex deployment configurations. 
 
-**NO MORE SHARED NETWORKING ~~(`network_mode: service:vpn`)~~ 😎🎉** 
+Twine is created to improve this process with a simple label-based (similar to Traefik) solution that is easy to configure and preserves containers full isolation.
 
-## Deploy
+This container works by modifying iptables, routes etc via `/proc:/host/proc` hook with `nsenter` in network layer of the docker containers. This preserves container isolation, while keeping the changes in the temporary layer that gets automatically cleaned up on container restarts.
+
+### Features:
+- Automatic management on containers restart/update
+- Routing
+- Port forwarding
+- Traffic forwarding 
+
+## Deploy Example
 ```yml
 version: "3"
 services:
@@ -90,6 +99,7 @@ git clone https://github.com/bitwister/twine.git
 cd twine
 docker-compose up --build
 ```
+Changes are automatically detected from your filesystem and deployed instantly.
 
 ### Moneh
 
