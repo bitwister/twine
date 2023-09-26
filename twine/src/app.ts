@@ -203,8 +203,7 @@ async function init(){
 			})
 
 		log.info("Ready")
-		
-		await update()
+		await utils.schedule(update, {every: 1000 * 60, immediate: true})
 
 		if(config.DEV){
 			log.info("Running test")
