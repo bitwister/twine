@@ -13,7 +13,7 @@ export let copy = (value)=>{
 	return JSON.parse(JSON.stringify(value))
 }
 
-export let schedule = async(handler, {
+export let schedule = (handler, {
 	every=1000*60, 
 	immediate=true
 })=>{
@@ -27,7 +27,7 @@ export let schedule = async(handler, {
 		if(!canceled) setTimeout(worker, every)
 	})
 	if(immediate){
-		await worker()
+		worker()
 	}else{
 		setTimeout(worker, every)
 	}
