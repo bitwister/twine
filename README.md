@@ -1,7 +1,7 @@
 # Twine
 ### Automated management of Docker container networking via labels. 
 
-Currently for Routing/Traffic forwarding existing implementations rely on `network_mode: service:vpn`, which merges existing networks into one, creating some limitations and making it harder to write/read complex deployment configurations. 
+Currently Routing/Traffic forwarding implementations rely on `network_mode: service:vpn`, which merge existing networks into one, creating some limitations, break network isolation and make it harder to write/read complex deployment configurations. 
 
 Twine is created to improve this process with a simple label-based (similar to Traefik) solution that is easy to configure and preserves containers full isolation.
 
