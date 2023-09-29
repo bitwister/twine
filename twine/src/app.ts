@@ -45,7 +45,7 @@ export let scanContainers = async(containerId?: string): Promise<Array<types.Con
 			gatewayInterface: "", // TODO: autodetect
 		}
 		for(let [label, value] of Object.entries(container.data["Labels"]) as Array<[string, string]>){
-			let labelForward = /^twine\.forward\.(?<sourcePort>\d+)(?<protocol>tcp|udp)?$/m.exec(label)
+			let labelForward = /^twine\.forward\.(?<sourcePort>\d+)(?:\/(?<protocol>tcp|udp))?$/m.exec(label)
 			if(labelForward){
 				let valueForward = /^(?<destination>.*?)(?:\:(?<destinationPort>\d+))?$/m.exec(value)
 				containerInfo.forwarding.push({
