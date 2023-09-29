@@ -8,10 +8,11 @@ Twine is created to improve this process with a simple label-based (similar to T
 This container works by modifying iptables, routes etc via `/proc:/host/proc` hook with `nsenter` in network layer of the docker containers. This preserves container isolation, while keeping the changes in the temporary layer that gets automatically cleaned up on container restarts.
 
 ### Features:
-- Automatic management on containers restart/update
 - Routing
 - Port forwarding
 - Traffic forwarding 
+- Automatic management on containers restart/update
+- iptables rules namespace isolation. All iptables rules added by the twine live in the `TWINE_*` namespace to avoid collision with existing container rules 
 
 ## Deploy Example
 ```yml
