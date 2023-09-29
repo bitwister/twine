@@ -196,7 +196,7 @@ async function init(){
 			.then(stream=>{
 				stream.on("data", (data)=>{
 					let event = JSON.parse(data.toString())
-					if(event.Type == "container" && ["restart", "start", "update"].indexOf(event.Action) != -1){
+					if(event.Type == "container" && ["restart", "start"].indexOf(event.Action) != -1){
 						update(event.id)
 					}
 				})
