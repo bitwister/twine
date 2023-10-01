@@ -47,6 +47,6 @@ jobs:
           provenance: false
           platforms: linux/amd64,linux/arm/v6,linux/arm64
           tags: |
-            ghcr.io/${{ env.REPO_OWNER }}/${{ IMAGE_NAME }}:${{ github.sha }}
-            ghcr.io/${{ env.REPO_OWNER }}/${{ IMAGE_NAME }}:${{ env.TAG }}
-            ghcr.io/${{ env.REPO_OWNER }}/${{ IMAGE_NAME }}:latest
+            ghcr.io/${{ env.REPO_OWNER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ghcr.io/${{ env.REPO_OWNER }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+            ghcr.io/${{ env.REPO_OWNER }}/${{ env.IMAGE_NAME }}:latest
