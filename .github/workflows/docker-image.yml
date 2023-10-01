@@ -10,7 +10,7 @@ env:
 jobs:
 
   build:
-    runs-on: actuated
+    runs-on: ubuntu-latest
     permissions:
       packages: write
       contents: read
