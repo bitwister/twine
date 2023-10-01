@@ -22,7 +22,8 @@ jobs:
       
       - name: Build image
         run: |
-          docker build twine --tag $IMAGE_NAME --label "runnumber=${GITHUB_RUN_ID}"
+          docker build twine --platform linux/amd64 --tag $IMAGE_NAME --label "runnumber=${GITHUB_RUN_ID}"
+          docker build twine --platform linux/arm64 --tag $IMAGE_NAME-arm --label "runnumber=${GITHUB_RUN_ID}"
 
       - name: Log in to registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -37,5 +38,7 @@ jobs:
           echo IMAGE_ID=$IMAGE_ID
           echo VERSION=$VERSION
           docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
+          docker tag $IMAGE_NAME-arm $IMAGE_ID:arm-$VERSION
           docker push $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:arm-$VERSION
   
