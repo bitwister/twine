@@ -1,6 +1,4 @@
-ARG BUILDPLATFORM
-
-FROM --platform=${BUILDPLATFORM:-linux/amd64} node:alpine
+FROM node:alpine
 
 RUN mkdir -p /app /app_dependencies
 RUN apk add --update rsync bash iproute2 curl
