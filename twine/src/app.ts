@@ -100,7 +100,7 @@ export let update = async(containerId?: string)=>{
 				let destinationIp = containerRoute.destination
 				if(!destinationIp.match(/^([\d\.]+)\.([\d\.]+)\.([\d\.]+)$/m)){
 					try{
-						destinationIp = (await docker.execNS(container.pid, `nslookup ${containerRoute.destination}`)).match(/answer\:.*?Address\:\s+([\d\.]+)/sm)[1]
+						destinationIp = (await docker.execNS(container.pid, `nslookup ${containerRoute.destination} 127.0.0.11`)).match(/answer\:.*?Address\:\s+([\d\.]+)/sm)[1]
 					}catch(error){
 						log.error(`Failed to resolve destination "${destinationIp}" for route ${containerRoute.network}>${containerRoute.destination} on ${container.name}`)
 						continue
@@ -164,7 +164,7 @@ export let update = async(containerId?: string)=>{
 				let destinationIp = forward.destination
 				if(!destinationIp.match(/^([\d\.]+)\.([\d\.]+)\.([\d\.]+)$/m)){
 					try{
-						destinationIp = (await docker.execNS(container.pid, `nslookup ${forward.destination}`)).match(/answer\:.*?Address\:\s+([\d\.]+)/sm)[1]
+						destinationIp = (await docker.execNS(container.pid, `nslookup ${forward.destination} 127.0.0.11`)).match(/answer\:.*?Address\:\s+([\d\.]+)/sm)[1]
 					}catch(error){
 						log.error(`Failed to resolve destination "${destinationIp}" for forwarding ${forward.sourcePort}>${forward.destination}:${forward.destinationPort}/${forward.protocol}`)
 						continue
