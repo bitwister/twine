@@ -1,4 +1,5 @@
-FROM node:alpine
+FROM docker.io/node:18-alpine 
+# https://github.com/nodejs/docker-node/issues/1798
 
 RUN mkdir -p /app /app_dependencies
 RUN apk add --update rsync bash iproute2 curl
