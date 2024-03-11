@@ -1,0 +1,6 @@
+FROM node:20-alpine 
+
+RUN apk add git
+RUN npm install -g pnpm
+RUN mkdir -p /app
+WORKDIR /app

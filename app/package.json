@@ -4,9 +4,9 @@
 	"description": "",
 	"main": "./dist/app.js",
 	"scripts": {
-		"start": "node --enable-source-maps ./dist/twine.js start",
+		"start": "node --enable-source-maps ./dist/app.js start",
 		"build": "node ./build.js",
-		"develop": "npx nodemon -L -w /app/src/ -e ts --exec \"npm run build && npm run start\""
+		"dev": "pnpx nodemon -L -w ./src -e ts --exec \"pnpm build && pnpm start\""
 	},
 	"private": true,
 	"license": "UNLICENSE",

@@ -5,7 +5,7 @@ module.exports.build = async()=>{
 	await esbuild.build({
 		entryPoints: ["./src/app.ts"],
 		bundle: true,
-		outfile: "./dist/twine.js",
+		outfile: "./dist/app.js",
 		platform: "node",
 		format: "cjs",
 		target: ["node14"],

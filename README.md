@@ -94,14 +94,27 @@ networks:
 ## Contribute
 
 ### Develop
-- Start the development environment
-```
-git clone https://github.com/bitwister/twine.git
-cd twine
+Docker is required.
+
+- To start development run:
+```bash
 docker-compose up --build
 ```
-Changes are automatically detected from your filesystem and deployed instantly.
 
+- To install packages while the project is running you can place the dependencies in the `package.json` and run 
+```bash
+docker-compose exec app pnpm i
+```
+
+### Windows
+
+- WSL2>Windows filesystem bridge is extremely slow. It is recommended to place the project files in the WSL2 filesystem. 
+
+```bash
+wsl
+git clone https://github.com/git-invoice.git 
+code git-invoice
+``` 
 ### Moneh
 
 I like moneh

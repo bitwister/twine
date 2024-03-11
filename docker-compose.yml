@@ -4,16 +4,18 @@ services:
 
 # Twine
   twine:
-    build: ./twine
+    build: 
+      context: ./app
+      dockerfile: Dockerfile.dev
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /proc:/host/proc
-      - ./twine:/app_live/ # Important for ./develop_in_container.sh
+      - ./app:/app/
     environment:
       - DEV=true
     privileged: true
-    command: ./develop_in_container.sh
+    command: sh -c "pnpm install && pnpm run dev"
 
 # Client side
   wireguard-client:
