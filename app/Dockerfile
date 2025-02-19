@@ -9,4 +9,4 @@ RUN pnpm i && pnpm run build
 FROM node:18-alpine 
 RUN apk add iptables iproute2
 COPY --from=build-stage /app/dist/ /app/
-CMD node /app/dist/app.js
+CMD node /app/app.js
