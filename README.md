@@ -14,32 +14,37 @@ Twine works by modifying container networking like iptables, routes, sysctl via 
 
 These labels, simillarly to the Traefik, apply networking configuration to the container, if specified in the `labels:` section of docker-compose.
 
-#### `twine.nat.interfaces=<interface>[,<interface>...]`
-> - `twine.nat.interfaces=+`
-> - `twine.nat.interfaces=wg+,eth+`
+- #### `twine.nat.interfaces=<interface>[,<interface>...]`
+  > `twine.nat.interfaces=wg+,eth+`
+  
+  > `twine.nat.interfaces=+`
 
-Enable NAT (forwarding) for the specified interfaces (patterns)
+  Enable NAT (forwarding) for the specified interfaces (patterns)
 
-#### `twine.nat.forward.[<interface>].<sourcePort>[/tcp\|udp]=<destination>:<port>`
-> - `twine.nat.forward.80=nginx:80`
-> - `twine.nat.forward.wg+.80=nginx:80`
-> - `twine.nat.forward.eth0.25565/tcp=minecraft:25565`
+- #### `twine.nat.forward.[<interface>].<sourcePort>[/tcp\|udp]=<destination>:<port>`
+  > `twine.nat.forward.eth0.25565/tcp=minecraft:25565`
 
-Forward incoming connections on sourcePort to specified destination 
+  > `twine.nat.forward.wg+.80=nginx:80`
 
-#### `twine.route.<network>=<destination>`
-> - `twine.route.192.168.0.1/24=wireguard`
-> - `twine.route.0.0.0.0/0=wireguard`
+  > `twine.nat.forward.80=nginx:80`
 
-Create a route 
+  Forward incoming connections on sourcePort to specified destination 
 
-#### `twine.host.routes=<network>[,<network>...]`
-> - `twine.host.routes=192.168.0.1/24`
-> - `twine.host.routes=192.168.100.1/24,10.20.0.0/24`
+- #### `twine.route.<network>=<destination>`
+  > `twine.route.192.168.0.1/24=wireguard`
 
-Create a route from a Docker host machine to the container
+  > `twine.route.0.0.0.0/0=wireguard`
 
-TODO: Implemented, but disabled. It is only possible to do on linux. Docker Desktop runtime (Windows/MacOS) is not supported...
+  Create a route 
+
+- #### `twine.host.routes=<network>[,<network>...]`
+  > `twine.host.routes=192.168.100.1/24,10.20.0.0/24`
+
+  > `twine.host.routes=192.168.0.1/24`
+
+  Create a route from a Docker host machine to the container
+
+  TODO: Implemented, but disabled. It is only possible to do on linux. Docker Desktop runtime (Windows/MacOS) is not supported...
 
 <!-- ### `twine.iptables.rule.<name>=<custom ip tables rule>`
 TODO
