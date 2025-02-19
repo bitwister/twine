@@ -45,8 +45,8 @@ jobs:
         with:
           outputs: "type=registry,push=true"
           provenance: false
-          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
-          context: "./app"
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          context: "./twine"
           tags: |
             ghcr.io/${{ env.REPO_OWNER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
             ghcr.io/${{ env.REPO_OWNER }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
