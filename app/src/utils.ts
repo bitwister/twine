@@ -103,5 +103,3 @@ export let exec = async(commands, options: {
 		}
 	}
 }
-
-export default exports

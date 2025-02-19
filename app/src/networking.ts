@@ -28,6 +28,12 @@ export class Router {
 	async del(route: types.IPRoute){
 		await this.exec(`route del -net ${route.destination} netmask ${route.mask} gw ${route.gateway} metric ${route.metric}`)
 	}
+	async addHost(hostRoute: {
+		destination: string, 
+		interface: string
+	}){
+		await this.exec(`route add -host ${hostRoute.destination} dev ${hostRoute.interface}`)
+	}
 }
 
 export class IPTables {
@@ -81,6 +87,10 @@ export class NetworkInterfaces {
 		}
 		return interfaces
 	}
+}
+
+export let matchNetworkInterface = (interfacePattern: string, interfaceName: string): Boolean=>{
+	return Boolean(interfaceName.match(RegExp(`${interfacePattern.replace("+", ".+")}`)))
 }
 
 export let iptables = new IPTables()

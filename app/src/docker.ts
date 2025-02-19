@@ -23,7 +23,9 @@ export let exec = async(containerId, command)=>{
 	let stream = await process.start({ Detach: false })
 	let output = ""
 	await new Promise((resolve, reject) => {
-		stream.on("data", (data) => output += data.toString("utf8"))
+		stream.on("data", (data) =>{
+			output += data.toString("utf8")
+		})
 		stream.on("error", reject)
 		stream.on("end", resolve);
 	})
@@ -31,7 +33,7 @@ export let exec = async(containerId, command)=>{
 }
 
 export let execNS = async(pid, command, options?): Promise<string>=>{
-	return await utils.exec(`nsenter -n/host/proc/${pid}/ns/net ${command}`, options) as string
+	return await utils.exec(`nsenter -n/proc/${pid}/ns/net ${command}`, options) as string
 }
 
 export let upload = async(containerId, files)=>{

@@ -16,7 +16,8 @@ export type ContainerRoute = {
 	destination: string,
 }
 
-export type ContainerForwardRule = {
+export type ContainerPortForwardRule = {
+	interface: string,
 	protocol: string,
 	sourcePort: string,
 	destination: string,
@@ -27,8 +28,13 @@ export type Container = {
 	id: string,
 	pid: string,
 	name: string,
-	forwarding: Array<ContainerForwardRule>
+	nat: {
+		interfaces: Array<string>,
+		portForwarding: Array<ContainerPortForwardRule>,
+	}
+	host: {
+		routes: Array<string>,
+	}
 	routes: Array<ContainerRoute>,
-	gatewayInterface: string
 }
 

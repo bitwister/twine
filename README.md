@@ -5,16 +5,62 @@ Currently Routing/Traffic forwarding implementations rely on `network_mode: serv
 
 Twine is created to improve this process with a simple label-based (similar to Traefik) solution that is easy to configure and preserves containers full isolation.
 
-This container works by modifying iptables, routes etc via `/proc:/host/proc` hook with `nsenter` in network layer of the docker containers. This preserves container isolation, while keeping the changes in the temporary layer that gets automatically cleaned up on container restarts.
+Twine works by modifying container networking like iptables, routes, sysctl via `pid: host` with `nsenter` in network layer of the docker containers. This preserves container network isolation, while keeping the changes in the temporary layer that gets automatically cleaned up in container lifecycle.
 
-### Features:
-- Routing
-- Port forwarding
-- Traffic forwarding 
-- Automatic management on containers restart/update
-- iptables rules namespace isolation. All iptables rules added by the twine live in the `TWINE_*` namespace to avoid collision with existing container rules 
 
-## Deploy Example
+## API Referrence
+
+### Container labels
+
+These labels, simillarly to the Traefik, apply networking configuration to the container, if specified in the `labels:` section of docker-compose.
+
+#### `twine.nat.interfaces=<interface>[,<interface>...]`
+> - `twine.nat.interfaces=+`
+> - `twine.nat.interfaces=wg+,eth+`
+
+Enable NAT (forwarding) for the specified interfaces (patterns)
+
+#### `twine.nat.forward.[<interface>].<sourcePort>[/tcp\|udp]=<destination>:<port>`
+> - `twine.nat.forward.80=nginx:80`
+> - `twine.nat.forward.wg+.80=nginx:80`
+> - `twine.nat.forward.eth0.25565/tcp=minecraft:25565`
+
+Forward incoming connections on sourcePort to specified destination 
+
+#### `twine.route.<network>=<destination>`
+> - `twine.route.192.168.0.1/24=wireguard`
+> - `twine.route.0.0.0.0/0=wireguard`
+
+Create a route 
+
+#### `twine.host.routes=<network>[,<network>...]`
+> - `twine.host.routes=192.168.0.1/24`
+> - `twine.host.routes=192.168.100.1/24,10.20.0.0/24`
+
+Create a route from a Docker host machine to the container
+
+TODO: Implemented, but disabled. It is only possible to do on linux. Docker Desktop runtime (Windows/MacOS) is not supported...
+
+<!-- ### `twine.iptables.rule.<name>=<custom ip tables rule>`
+TODO
+### `twine.nat.whitelist.[<interface>].from=<network>[,<network>...]`
+TODO
+### `twine.nat.whitelist.[<interface>].to=<network>[,<network>...]`
+TODO -->
+
+### **Environment**
+| Variable | Values | Default | Description |
+| - | - | - | - |
+| `LOG_LEVEL` | `debug,info` | `info` | Logging level |
+
+### **Volumes**
+| Container path | Description |
+| - | - |
+| `/var/run/docker.sock` | Docker mangement socket |
+
+## Usecase Examples
+
+### VPN Infrastracture
 ```yml
 version: "3"
 services:
@@ -22,10 +68,11 @@ services:
   twine:
     image: ghcr.io/bitwister/twine:latest
     restart: unless-stopped
+    # Required access:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /proc:/host/proc
     privileged: true
+    pid: host
   
   wireguard-client:
     image: lscr.io/linuxserver/wireguard:latest
@@ -44,9 +91,9 @@ services:
       - ./config/wireguard/wg0.conf:/config/wg0.conf:ro
     labels:
       # Interface for forwarding traffic (Required for "twine.route.*=wireguard-client" to work) 
-      - twine.gateway.interface=wg+
+      - twine.nat.interfaces=wg+
       # Expose qbittorrent on WireGuard Client ip address
-      - twine.forward.9080=qbittorrent:9080
+      - twine.nat.forward.9080=qbittorrent:9080
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
@@ -71,25 +118,9 @@ networks:
   main:
 ```
 
-## API
+### LetsEncrypt Traefik DNS Challenge with dnsmasq 
+TODO
 
-### **Environment**
-| Variable | Values | Default | Description |
-| - | - | - | - |
-| `LOG_LEVEL` | `debug,info` | `info` | Logging level |
-
-### **Volumes**
-| Container path | Description |
-| - | - |
-| `/var/run/docker.sock` | Docker mangement socket |
-| `/host/proc` | Host machine /proc access (Used for network layer patching) |
-
-### **Labels**
-| Name | Example | Description |
-| - | - | - |
-| `twine.gateway.interface` | `wg+` | Interface for forwarding incoming traffic (Required for "twine.route.*=" to work)  |
-| `twine.forward.<sourcePort>[/tcp\|udp]=<destination>:<port>` | `twine.forward.9080=qbittorrent:9080` | Forward incoming connections on sourcePort to specified destination | 
-| `twine.route.<network>=<destination>` | `twine.route.10.250.0.0/24=wireguard-client` | Route specified network to the specified destination |
 
 ## Contribute
 
@@ -115,9 +146,3 @@ wsl
 git clone https://github.com/git-invoice.git 
 code git-invoice
 ``` 
-### Moneh
-
-I like moneh
-
-XMR - `47h5CYGYDFNN8z7tAyXqbtcTep8pMidJfe66g8CL65u7gun6eJ9aew9PnwhTaYbV5L2rpDZhwv4gmAxf5tMbwuDBT8MJes5`
-

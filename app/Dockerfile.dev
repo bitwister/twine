@@ -1,6 +1,6 @@
-FROM node:20-alpine 
+FROM node:18-alpine 
 
-RUN apk add git
+RUN apk add git bash iproute2 curl iptables
 RUN npm install -g pnpm
 RUN mkdir -p /app
 WORKDIR /app

@@ -8,13 +8,13 @@ services:
       context: ./app
       dockerfile: Dockerfile.dev
     restart: unless-stopped
+    pid: host
+    privileged: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /proc:/host/proc
       - ./app:/app/
     environment:
       - DEV=true
-    privileged: true
     command: sh -c "pnpm install && pnpm run dev"
 
 # Client side
@@ -24,8 +24,8 @@ services:
     depends_on:
       - wireguard-server
     networks:
-      - client
-      - server
+      client:
+      server:
     cap_add:
       - NET_ADMIN
     sysctls:
@@ -35,12 +35,14 @@ services:
       - PGID=1000
       - TZ=Etc/UTC
     volumes:
-      - ./config/wireguard-server/peer1/peer1.conf:/config/wg0.conf:ro
+      - ./config/wireguard-test/client.conf:/config/wg_confs/wg0.conf:ro
     labels:
       # Interface for forwarding traffic (Required for "twine.route.*=wireguard-client" to work) 
-      - twine.gateway.interface=wg+
+      - twine.nat.interfaces=+
       # Expose qbittorrent on WireGuard Client ip address
-      - twine.forward.80=qbittorrent:80
+      - twine.nat.forward.80=qbittorrent:80
+      # - twine.host.routes=10.250.0.0/24
+      # - twine.whitelist.eth+.to=qbittorrent
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
@@ -79,18 +81,23 @@ services:
       - PEERS=1
       - INTERNAL_SUBNET=10.250.0.0/24
     volumes:
-      - ./config/wireguard-server:/config
+      - ./config/wireguard-test/server.conf:/config/wg_confs/wg0.conf:ro
       - /lib/modules:/lib/modules
     labels:
-      - twine.gateway.interface=wg+
+      - twine.nat.interfaces=+
       # Expose qbittorrent on WireGuard Server ip address
-      - twine.forward.80=helloworld
+      - twine.nat.forward.80=helloworld
+      # - twine.whitelist.wg+.to=helloworld
+      
 
   helloworld:
     image: nginxdemos/hello
     restart: unless-stopped
     networks:
       - server
+    # labels:
+      # Make this container only accessible with CloudFlare IP address
+      # - twine.whitelist.eth+.from=https://www.cloudflare.com/ips-v4/
 
 networks:
   client:
