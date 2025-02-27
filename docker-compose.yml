@@ -1,5 +1,4 @@
 # This docker-compose file is used for local development
-version: "3"
 services:
 
 # Twine
@@ -21,15 +20,13 @@ services:
   wireguard-client:
     image: lscr.io/linuxserver/wireguard:latest
     restart: unless-stopped
+    cap_add: [NET_ADMIN, SYS_MODULE]
+    sysctls: [net.ipv4.conf.all.src_valid_mark=1]
     depends_on:
       - wireguard-server
     networks:
       client:
       server:
-    cap_add:
-      - NET_ADMIN
-    sysctls:
-      - net.ipv4.conf.all.src_valid_mark=1
     environment:
       - PUID=1000
       - PGID=1000
@@ -40,7 +37,7 @@ services:
       # Interface for forwarding traffic (Required for "twine.route.*=wireguard-client" to work) 
       - twine.nat.interfaces=+
       # Expose qbittorrent on WireGuard Client ip address
-      - twine.nat.forward.80=qbittorrent:80
+      - twine.nat.forward.wg+.80=qbittorrent:80
       # - twine.host.routes=10.250.0.0/24
       # - twine.whitelist.eth+.to=qbittorrent
 
@@ -67,11 +64,9 @@ services:
   wireguard-server:
     image: lscr.io/linuxserver/wireguard:latest
     restart: unless-stopped
+    cap_add: [NET_ADMIN, SYS_MODULE]
     networks:
       - server
-    cap_add:
-      - NET_ADMIN
-      - SYS_MODULE 
     environment:
       - PUID=1000
       - PGID=1000
@@ -88,6 +83,8 @@ services:
       # Expose qbittorrent on WireGuard Server ip address
       - twine.nat.forward.80=helloworld
       # - twine.whitelist.wg+.to=helloworld
+      - twine.iptables.rule.blockAll=TWINE_INPUT -s 10.250.0.1/24 -d 0.0.0.0 -j DROP
+      - twine.iptables.rule.allowVPN=TWINE_INPUT -s 10.250.0.1/24 -d 10.250.0.1/24 -j ACCEPT
       
 
   helloworld:
@@ -101,4 +98,6 @@ services:
 
 networks:
   client:
+    driver: bridge
   server:
+    driver: bridge

@@ -37,6 +37,22 @@ These labels, simillarly to the Traefik, apply networking configuration to the c
 
   Create a route 
 
+- #### `twine.iptables.rule.<name>=<iptables_rule>`
+  > `twine.iptables.rule.blockAll=WINE_INPUT -s 10.250.0.1/24 -d 0.0.0.0 -j DROP`
+  
+  > `twine.iptables.rule.allowVPN=TWINE_INPUT -s 10.250.0.1/24 -d 10.250.0.1/24 -j ACCEPT`
+
+  Create a custom iptables rule with a `<name>`.
+
+  Avaialble chains:
+    - `TWINE_INPUT`
+    - `TWINE_OUTPUT`
+    - `TWINE_FORWARD`
+    - `TWINE_NAT_POSTROUTING`
+    - `TWINE_NAT_PREROUTING`
+    - `TWINE_NAT_OUTPUT`
+
+
 - #### `twine.host.routes=<network>[,<network>...]`
   > `twine.host.routes=192.168.100.1/24,10.20.0.0/24`
 

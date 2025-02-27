@@ -4,6 +4,8 @@ import fs from "fs"
 import * as utils from "@/utils"
 import * as types from "@/types"
 
+
+// TODO: Implement ip route with named tables
 export class Router {
 	exec: (command: string) => Promise<string>
 	constructor(exec?: (command: string) => Promise<string>){

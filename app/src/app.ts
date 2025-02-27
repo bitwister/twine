@@ -42,6 +42,9 @@ export let scanContainers = async(containerId?: string): Promise<Array<types.Con
 			id: container.data["Id"],
 			pid: (await container.status()).data["State"]["Pid"],
 			name: container.data["Names"][0].replace(/^\//m, ""),
+			iptables: {
+				customRules: {}
+			},
 			nat: {
 				interfaces: [],
 				portForwarding: [],
@@ -114,6 +117,19 @@ export let scanContainers = async(containerId?: string): Promise<Array<types.Con
 				containerInfo.nat.interfaces = value.trim().split(",")
 			}
 
+// twine.iptables.rule.<name>=
+			let labelIptablesCustomRule = /^twine\.iptables\.rule\.(?<name>\w+)$/m.exec(label)
+			if(labelIptablesCustomRule){
+				let rule = value.trim().replace(/\s+/g, " ")
+				if(labelIptablesCustomRule.groups.name.match(/^TWINE_NAT/m)){
+					rule = `-t nat -A ${rule}`
+				}else{
+					rule = `-A ${rule}`
+				}
+				containerInfo.iptables.customRules[labelIptablesCustomRule.groups.name] = rule
+				// TODO: Validation and normalization
+			}
+
 // twine.forwarding.interface.wg+.whitelist=
 // twine.forwarding.interface.wg+.whitelist.in=
 // twine.forwarding.interface.wg+.whitelist.out=
@@ -138,11 +154,12 @@ export let update = async(containerId?: string)=>{
 	// }
 	// let hostRoutes = await hostRouter.fetch()
 
+	// TODO: Optimize
 	for(let container of containers){
 
 		try{
 			let router = new networking.Router((command)=>docker.execNS(container.pid, command))
-			let iptables = new networking.IPTables((command)=>docker.execNS(container.pid, command))
+			let iptables = new networking.IPTables((command)=>docker.execNS(container.pid, command, {log: true}))
 			let networkInterfaces = new networking.NetworkInterfaces((command)=>docker.execNS(container.pid, command))
 			// let containerInterfaces = await networkInterfaces.fetch()
 
@@ -201,30 +218,38 @@ export let update = async(containerId?: string)=>{
 
 			// Reset iptables rules with TWINE_* namespace
 			await iptables.insert([
+				`-D INPUT -j TWINE_INPUT`,
+				`-D OUTPUT -j TWINE_OUTPUT`,
 				`-D FORWARD -j TWINE_FORWARD`,
-				`-t nat -D POSTROUTING -j TWINE_POSTROUTING`,
-				`-t nat -D PREROUTING -j TWINE_PREROUTING`,
-				`-t nat -D OUTPUT -j TWINE_OUTPUT`,
+				`-t nat -D POSTROUTING -j TWINE_NAT_POSTROUTING`,
+				`-t nat -D PREROUTING -j TWINE_NAT_PREROUTING`,
+				`-t nat -D OUTPUT -j TWINE_NAT_OUTPUT`,
 				`-F TWINE_FORWARD`,
-				`-t nat -F TWINE_POSTROUTING`,
-				`-t nat -F TWINE_PREROUTING`,
-				`-t nat -F TWINE_OUTPUT`,
+				`-t nat -F TWINE_NAT_POSTROUTING`,
+				`-t nat -F TWINE_NAT_PREROUTING`,
+				`-t nat -F TWINE_NAT_OUTPUT`,
 			], {force: true})
+
+			// Create TWINE_* namespace
 			await iptables.insert([
 				`-P INPUT ACCEPT`,
 				`-P OUTPUT ACCEPT`,
 				`-P FORWARD ACCEPT`,
 				`-t nat -P PREROUTING ACCEPT`,
 				`-t nat -P POSTROUTING ACCEPT`,
+				`-N TWINE_INPUT`,
+				`-N TWINE_OUTPUT`,
 				`-N TWINE_FORWARD`,
-				`-t nat -N TWINE_POSTROUTING`,
-				`-t nat -N TWINE_PREROUTING`,
-				`-t nat -N TWINE_OUTPUT`,
+				`-t nat -N TWINE_NAT_POSTROUTING`,
+				`-t nat -N TWINE_NAT_PREROUTING`,
+				`-t nat -N TWINE_NAT_OUTPUT`,
+				`-A FORWARD -j TWINE_INPUT`,
+				`-A FORWARD -j TWINE_OUTPUT`,
 				`-A FORWARD -j TWINE_FORWARD`,
-				`-t nat -A POSTROUTING -j TWINE_POSTROUTING`,
-				`-t nat -A PREROUTING -j TWINE_PREROUTING`,
-				`-t nat -A OUTPUT -j TWINE_OUTPUT`,
-				`-t nat -A TWINE_POSTROUTING -o eth+ -j MASQUERADE`,
+				`-t nat -A POSTROUTING -j TWINE_NAT_POSTROUTING`,
+				`-t nat -A PREROUTING -j TWINE_NAT_PREROUTING`,
+				`-t nat -A OUTPUT -j TWINE_NAT_OUTPUT`,
+				`-t nat -A TWINE_NAT_POSTROUTING -o eth+ -j MASQUERADE`,
 			], {force: true})
 			
 			// Add forwarding rules between container interface and `twine.gateway.interface` 
@@ -237,7 +262,7 @@ export let update = async(containerId?: string)=>{
 					if(await iptables.insert([
 						`-A TWINE_FORWARD -d ${container.name} -o ${natInterface} -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT`,
 						`-A TWINE_FORWARD -i ${natInterface} -s ${container.name} -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT`,
-						`-t nat -A TWINE_POSTROUTING -o ${natInterface} -j MASQUERADE`,
+						`-t nat -A TWINE_NAT_POSTROUTING -o ${natInterface} -j MASQUERADE`,
 					])){
 						log.info(`Enabled NAT for "${natInterface}" interface on "${container.name}"`)
 					}
@@ -268,8 +293,9 @@ export let update = async(containerId?: string)=>{
 							// log.error(`Failed applying NAT port forwarding rule for container "${container.name}": NAT is not enabled for the container, try enabling it by adding "twine.nat.interfaces=${interfaceName}"`)
 							continue;
 						}
-						rules.push(`-t nat -A TWINE_PREROUTING -d ${address} -p ${rule.protocol} -m multiport --dports ${rule.sourcePort} -j DNAT --to ${destinationIp}:${rule.destinationPort}`)
-						rules.push(`-t nat -A TWINE_OUTPUT -d ${address} -p ${rule.protocol} -m multiport --dports ${rule.sourcePort} -j DNAT --to ${destinationIp}:${rule.destinationPort}`)
+						rules.push(`-t nat -A TWINE_NAT_PREROUTING -d ${address} -p ${rule.protocol} -m multiport --dports ${rule.sourcePort} -j DNAT --to ${destinationIp}:${rule.destinationPort}`)
+						rules.push(`-t nat -A TWINE_NAT_OUTPUT -d ${address} -p ${rule.protocol} -m multiport --dports ${rule.sourcePort} -j DNAT --to ${destinationIp}:${rule.destinationPort}`)
+					
 					}
 
 					if(await iptables.insert(rules)){
@@ -303,6 +329,17 @@ export let update = async(containerId?: string)=>{
 			// 		log.info(`Updated host route "${containerHostRoute}" to container "${container.name}" at "${containerHostIp}"`)
 			// 	}
 			// }
+
+// twine.iptables.rule.
+			if(Object.keys(container.iptables.customRules).length){
+				let rules = []
+				for(let [name, rule] of Object.entries(container.iptables.customRules)){
+					rules.push(rule)
+				}
+				await iptables.insert(rules)
+			}
+
+
 		}catch(error){
 			log.error(`Error during processing of container "${container.name}"`, error)
 		}
@@ -321,9 +358,13 @@ async function init(){
 		docker.docker.events({})
 			.then(stream=>{
 				stream.on("data", (data)=>{
-					let event = JSON.parse(data.toString())
-					if(event.Type == "container" && ["restart", "start"].indexOf(event.Action) != -1){
-						update(event.id)
+					try{
+						let event = JSON.parse(data.toString())
+						if(event.Type == "container" && ["restart", "start"].indexOf(event.Action) != -1){
+							update(event.id)
+						}
+					}catch(error){
+						log.error("Failed parsing Docker event", error)
 					}
 				})
 			})
@@ -353,8 +394,8 @@ async function init(){
 			// await containers["twine-wireguard-client-1"].test(`curl -sS ipinfo.io`)
 			await containers["twine-wireguard-client-1"].test(`curl -sS 10.250.0.1:80`)
 
-			await containers["twine-qbittorrent-1"].test(`traceroute -m 2 1.1.1.1`)
-			await containers["twine-qbittorrent-1"].test(`traceroute -m 2 10.250.0.1`)
+			await containers["twine-qbittorrent-1"].test(`ping -c 1 1.1.1`)
+			await containers["twine-qbittorrent-1"].test(`traceroute -m 2 10.250.0.2`)
 			// await containers["twine-qbittorrent-1"].test(`curl -sS ipinfo.io`)
 			await containers["twine-qbittorrent-1"].test(`curl -sS 10.250.0.1:80`)
 			await containers["twine-qbittorrent-1"].test(`curl -sS 10.250.0.2:80`)

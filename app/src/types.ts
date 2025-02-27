@@ -28,6 +28,9 @@ export type Container = {
 	id: string,
 	pid: string,
 	name: string,
+	iptables: {
+		customRules: {[name: string]: string}
+	},
 	nat: {
 		interfaces: Array<string>,
 		portForwarding: Array<ContainerPortForwardRule>,
