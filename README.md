@@ -89,6 +89,40 @@ services:
     pid: host
 ```
 
+### VPN Stacking 
+In this example traffic is "stacked" by routing `wireguard-client` VPN traffic via `xraytun` VPN tunnel to bypass local country restrictions on Wireguard.
+
+Using [goxray/tun](https://github.com/goxray/tun) in this example, but this can also work on any container which provides tunnelling interface.
+
+```yml
+services:
+
+  xraytun:
+    image: ghcr.io/goxray/tun
+    cap_add: [NET_ADMIN]
+    networks:
+      - main
+    environment:
+      # - CONFIG=vless://...
+    labels:
+      - twine.nat.interfaces=tun+
+
+  wireguard-client:
+    image: lscr.io/linuxserver/wireguard:latest
+    cap_add: [NET_ADMIN, SYS_MODULE]
+    sysctls: [net.ipv4.conf.all.src_valid_mark=1]
+    networks:
+      - main
+    labels:
+      - twine.nat.interfaces=wg+
+      # Route all outgoing traffic via xraytun client
+      - twine.route.0.0.0.0/1=xraytun
+      - twine.route.128.0.0.0/1=xraytun
+
+networks:
+  main:
+```
+
 ### VPN Infrastracture
 In this example whole internet traffic of `qbittorrent` container is routed via `wireguard-client` container. 
 
